@@ -233,14 +233,20 @@ export default function App() {
                 <Icon size={18} strokeWidth={1.7} /><span>{label}</span>{key === 'library' && <small>{books.length}</small>}
               </button>)}
             </nav>
-            <div className="side-separator" />
-            <div className="nav-label collection-label">COLLECTIONS <button className="icon-button" aria-label="New collection" onClick={() => setDialog({ kind: 'collection' })}><Plus size={16} /></button></div>
-            {collections.length ? <nav aria-label="Your collections">{collections.map(item => <button className={`nav-item ${view === item.id ? 'selected' : ''}`} key={item.id} onClick={() => navigate(item.id)}><Folder size={17} /><span>{item.name}</span></button>)}</nav> :
-              <button className="create-link" onClick={() => setDialog({ kind: 'collection' })}><Plus size={15} /> New collection</button>}
+            <div className="sidebar-collections">
+              <div className="nav-label collection-label">COLLECTIONS
+                {collections.length > 0 && <button className="icon-button" aria-label="New collection" title="New collection" onClick={() => setDialog({ kind: 'collection' })}><Plus size={16} /></button>}
+              </div>
+              {collections.length ? <nav aria-label="Your collections">{collections.map(item => <button className={`nav-item ${view === item.id ? 'selected' : ''}`} aria-current={view === item.id ? 'page' : undefined} key={item.id} onClick={() => navigate(item.id)}><Folder size={17} /><span>{item.name}</span></button>)}</nav> :
+                <button className="create-link" onClick={() => setDialog({ kind: 'collection' })}><Plus size={16} /> New collection</button>}
+            </div>
           </div>
           <div className="sidebar-foot">
-            <button className={`nav-item ${view === 'settings' ? 'selected' : ''}`} onClick={() => navigate('settings')}><SettingsIcon size={18} strokeWidth={1.7} /> Settings</button>
-            <div className="storage-card"><div><Database size={15} /><strong>Local storage</strong></div><div className="storage-meter"><i style={{ width: usage && quota ? Math.max(2, usage / quota * 100) + '%' : '0%' }} /></div><small>{fileSize(usage)} used on this device</small></div>
+            <button className={`nav-item ${view === 'settings' ? 'selected' : ''}`} aria-current={view === 'settings' ? 'page' : undefined} onClick={() => navigate('settings')}><SettingsIcon size={18} strokeWidth={1.7} /><span>Settings</span></button>
+            <div className="storage-card">
+              <div className="storage-title"><Database size={15} /><strong>Local storage</strong><small>{fileSize(usage)} used</small></div>
+              <div className="storage-meter"><i style={{ width: usage && quota ? Math.min(100, Math.max(2, usage / quota * 100)) + '%' : '0%' }} /></div>
+            </div>
           </div>
         </aside>
         <div className="workspace">
