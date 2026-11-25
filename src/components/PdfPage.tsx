@@ -47,6 +47,7 @@ interface Props {
   annotations?: Annotation[]
   thumbnail?: boolean
   cacheRaster?: boolean
+  onSettled?: () => void
 }
 function markSearch(layer: HTMLDivElement, query: string) {
   const phrase = query.toLocaleLowerCase().trim().replace(/\s+/g, ' ')
@@ -66,12 +67,14 @@ function markSearch(layer: HTMLDivElement, query: string) {
   }
 }
 
-export default memo(function PdfPage({ pdf, number, width, height, theme = 'Original', text = true, query = '', annotations = noAnnotations, thumbnail = false, cacheRaster = false }: Props) {
+export default memo(function PdfPage({ pdf, number, width, height, theme = 'Original', text = true, query = '', annotations = noAnnotations, thumbnail = false, cacheRaster = false, onSettled }: Props) {
   const paper = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const layer = useRef<HTMLDivElement>(null)
   const latestQuery = useRef(query)
   latestQuery.current = query
+  const settled = useRef(onSettled)
+  settled.current = onSettled
   useEffect(() => {
     const holder = paper.current!
     const target = canvas.current!
@@ -130,6 +133,7 @@ export default memo(function PdfPage({ pdf, number, width, height, theme = 'Orig
         if (cacheRaster) cachePageRaster(pdf, rasterKey, target, () => !disposed)
       }
       holder.dataset.rendered = 'true'
+      settled.current?.()
       if (cached) {
         if (cached.size >= 96) {
           const oldest = cached.keys().next()
@@ -149,7 +153,11 @@ export default memo(function PdfPage({ pdf, number, width, height, theme = 'Orig
       release()
     }
     void renderPage().catch(error => {
-      if (!disposed) { holder.dataset.error = 'true'; console.error('PDF page rendering failed', error) }
+      if (!disposed) {
+        holder.dataset.error = 'true'
+        settled.current?.()
+        console.error('PDF page rendering failed', error)
+      }
     })
     return () => {
       disposed = true
@@ -159,6 +167,9 @@ export default memo(function PdfPage({ pdf, number, width, height, theme = 'Orig
       target.width = target.height = 0
     }
   }, [pdf, number, width, height, text, thumbnail, cacheRaster])
+  useEffect(() => {
+    if (paper.current?.dataset.rendered || paper.current?.dataset.error) onSettled?.()
+  }, [onSettled])
   useEffect(() => {
     const element = layer.current
     if (!element) return

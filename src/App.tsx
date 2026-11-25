@@ -5,7 +5,7 @@ import {
   ShieldCheck, Sigma, SlidersHorizontal, Sun, Trash2, UserRound, Wifi, WifiOff, X,
 } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
-import { Cover, Logo, Modal } from './components/Common'
+import { BookLoading, Cover, Logo, Modal } from './components/Common'
 import Settings from './components/Settings'
 import BookCard, { type BookAction } from './components/BookCard'
 import { fileSize, progress, type Book, type LibraryLayout } from './lib/model'
@@ -296,7 +296,7 @@ export default function App() {
     <input type="file" accept="application/pdf,.pdf" multiple hidden ref={files} onChange={event => { if (event.target.files) void importFiles(event.target.files) }} />
     {activeBook && <ReaderBoundary key={activeBook.id} close={exitReader}>
       <Suspense fallback={<div className="center-screen">
-        <div className="reader-state"><span role="status">Opening your book…</span><button className="secondary-button" onClick={exitReader}>Back to library</button></div>
+        <div className="reader-state"><BookLoading message="Opening your book…" reducedMotion={preferences.reducedMotion} /><button className="secondary-button" onClick={exitReader}>Back to library</button></div>
       </div>}>
         <Reader book={activeBook} file={openingFile.current?.id === active ? openingFile.current?.source : undefined} close={exitReader} password={unlockBook} toast={toast} />
       </Suspense>
@@ -406,7 +406,7 @@ export default function App() {
                   {onShelves && view === 'library' && categories.length > 0 && <div className="category-chips" role="group" aria-label="Filter by category">
                     {categoryOptions.map(([value, count]) => <button key={value} aria-pressed={category === value} onClick={() => pickCategory(value)}>{categoryLabel(value)} <small>({count})</small></button>)}
                   </div>}
-                  {!ready && <div className="empty">Loading your library…</div>}
+                  {!ready && <div className="empty"><BookLoading message="Loading your library…" reducedMotion={preferences.reducedMotion} /></div>}
                   {ready && !rows.length && <div className="empty"><BookOpen size={30} /><h3>{query || (onShelves && category) ? 'No matching books' : view === 'favorites' ? 'No favorites yet' : view === 'recent' ? 'No books opened yet' : 'No books here yet'}</h3>
                     <p>{query ? 'Try another title or category.' : view === 'favorites' ? 'Use the heart on any book to save it here.' : collection ? 'Use a book’s menu to move it into this collection.' : 'Upload a PDF to start reading.'}</p>
                     {!query && view === 'library' && <button className="primary-button" onClick={() => setDialog({ kind: 'upload' })}><FileUp size={16} /> Upload PDF</button>}

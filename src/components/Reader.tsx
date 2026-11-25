@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowLeft, BookOpen, Bookmark, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download,
   Focus, Highlighter, ListTree, Maximize, Minimize, Minus, Palette, PanelLeft, Plus, Search, SlidersHorizontal, StickyNote, Trash2, X,
@@ -9,7 +9,7 @@ import { loadPdf, outline, pageText, type OutlineEntry, type PasswordRequest } f
 import { readFile } from '../lib/storage'
 import { useLibrary } from '../lib/store'
 import type { Annotation, Book, Fit, Mode, Theme } from '../lib/model'
-import { Modal } from './Common'
+import { BookLoading, Modal } from './Common'
 import FlipBook from './FlipBook'
 import PdfPage, { clearPageRasters } from './PdfPage'
 
@@ -26,6 +26,8 @@ export default function Reader({ book, file, close, password, toast }: { book: B
   const [pdf, setPdf] = useState<PDFDocumentProxy>()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(0)
+  const [firstPageSettled, setFirstPageSettled] = useState(false)
+  const pageSettled = useCallback(() => setFirstPageSettled(true), [])
   const [page, setPage] = useState(book.page)
   const [jumpField, setJumpField] = useState(String(book.page))
   const [pane, setPane] = useState<Pane>()
@@ -96,7 +98,12 @@ export default function Reader({ book, file, close, password, toast }: { book: B
         const initial = first.getViewport({ scale: 1 })
         if (!controller.signal.aborted) setRatio(initial.width / initial.height)
       }
-      if (!controller.signal.aborted) setPdf(document)
+      if (!controller.signal.aborted) {
+        const restored = clampPage(book.page, document.numPages)
+        setPage(restored)
+        setJumpField(String(restored))
+        setPdf(document)
+      }
     }
     void open().catch(value => {
       if (!controller.signal.aborted) setError(value instanceof Error ? value.message : 'This PDF could not be opened.')
@@ -370,18 +377,21 @@ export default function Reader({ book, file, close, password, toast }: { book: B
         }
       }}>
         {error ? <div className="reader-state"><BookOpen size={28} /><h2>Couldn’t open this PDF</h2><p>{error}</p><button className="secondary-button" onClick={close}>Back to library</button></div> :
-          !pdf ? <div className="reader-state" role="status"><span className="spinner" /> Loading your book{loading > 0 ? ' · ' + loading + '%' : '…'}</div> :
+          !pdf ? null :
           scrolling ? <div className="scroll-pages" style={{ width, height: scrollHeight }}>
             {Array.from({ length: lastVisible - firstVisible + 1 }, (_, index) => {
               const number = firstVisible + index
               return <div className="scroll-leaf" style={{ height, top: (number - 1) * scrollStep }} key={number}>
-                <PdfPage pdf={pdf} number={number} width={width} height={height} theme={theme} query={query} annotations={book.annotations} />
+                <PdfPage pdf={pdf} number={number} width={width} height={height} theme={theme} query={query} annotations={book.annotations} onSettled={number === page ? pageSettled : undefined} />
               </div>
             })}
           </div> : <div className={`book-centering ${compact ? 'compact' : ''}`}>
-            <FlipBook pdf={pdf} page={page} change={updatePage} registerNavigation={handler => { navigation.current = handler }} width={width} height={height} spread={spread} motion={preferences.animation && !reduced} theme={theme} query={query} annotations={book.annotations} pinch={pinch} pinchScale={pinchScale} pan={needsPanning ? pan : undefined} />
+            <FlipBook pdf={pdf} page={page} change={updatePage} registerNavigation={handler => { navigation.current = handler }} width={width} height={height} spread={spread} motion={preferences.animation && !reduced} theme={theme} query={query} annotations={book.annotations} pinch={pinch} pinchScale={pinchScale} pan={needsPanning ? pan : undefined} pageSettled={pageSettled} />
           </div>}
       </div>
+      {!firstPageSettled && !error && <div className="reader-loading-splash">
+        <BookLoading message={loading > 0 && !pdf ? `Loading your book · ${loading}%` : 'Loading your book…'} reducedMotion={reduced} />
+      </div>}
     </div>
     {!focus && <footer className="reader-footer">
       {pdf && <>

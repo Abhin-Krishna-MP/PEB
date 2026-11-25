@@ -10,10 +10,10 @@ interface Props {
   pdf: PDFDocumentProxy; page: number; change: (number: number) => void; registerNavigation: (handler: (direction: -1 | 1) => void) => void
   width: number; height: number; spread: boolean; motion: boolean; theme: Theme
   query: string; annotations: Annotation[]; pinch: (ratio: number, end: boolean) => void
-  pinchScale: number; pan?: (x: number, y: number) => void
+  pinchScale: number; pan?: (x: number, y: number) => void; pageSettled: () => void
 }
 
-export default function FlipBook({ pdf, page, change, registerNavigation, width, height, spread, motion, theme, query, annotations, pinch, pinchScale, pan }: Props) {
+export default function FlipBook({ pdf, page, change, registerNavigation, width, height, spread, motion, theme, query, annotations, pinch, pinchScale, pan, pageSettled }: Props) {
   const [turn, setTurn] = useState<Turn>()
   const liveTurn = useRef<Turn | undefined>(undefined)
   const surface = useRef<HTMLDivElement>(null)
@@ -178,7 +178,7 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
   }
   const style = { '--leaf-width': width + 'px', '--leaf-height': height + 'px', scale: pinchScale === 1 ? undefined : pinchScale } as CSSProperties
   const renderPage = (number: number, withText: boolean) =>
-    number <= pdf.numPages ? <PdfPage pdf={pdf} number={number} width={width} height={height} theme={theme} text={withText} query={withText ? query : ''} annotations={annotations} cacheRaster={!withText} /> : <div className={`blank-paper paper-${theme.toLowerCase()}`} />
+    number <= pdf.numPages ? <PdfPage pdf={pdf} number={number} width={width} height={height} theme={theme} text={withText} query={withText ? query : ''} annotations={annotations} cacheRaster={!withText} onSettled={withText && number === page ? pageSettled : undefined} /> : <div className={`blank-paper paper-${theme.toLowerCase()}`} />
   const target = turn && spreadStart(turn.target, spread)
   const turningRightLeaf = spread && turn?.forward
   return <div ref={surface} className={`flipbook ${spread ? 'spread' : 'single'}`} data-theme={theme.toLowerCase()} style={style} onPointerDown={down} onPointerMove={move} onPointerUp={event => release(event)} onPointerCancel={event => release(event, true)}>

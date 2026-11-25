@@ -17,7 +17,7 @@ export default defineConfig({
     },
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'maskable.png'],
+      includeAssets: ['favicon.png', 'icon-192.png', 'icon-512.png', 'maskable.png'],
       manifest: {
         name: 'Folio — Your reading room', short_name: 'Folio',
         description: 'A private, offline-first PDF flipbook reader.',
@@ -29,7 +29,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,mjs,css,html,png,svg,webp,jpg,pdf,woff2,bcmap,ttf,pfb,wasm,icc}'],
+        globPatterns: ['**/*.{js,mjs,css,html,png,svg,webp,jpg,gif,pdf,woff2,bcmap,ttf,pfb,wasm,icc}'],
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,

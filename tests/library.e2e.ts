@@ -99,6 +99,29 @@ test.describe('interrupting a slow open', () => {
     }
     await expect(page.locator('.reader')).toHaveCount(0)
   })
+
+  test('shows the supplied loading animation and uses a still image with reduced motion', async ({ page }) => {
+    const release = Promise.withResolvers<void>()
+    await page.route('**/samples/algorithms.pdf', async route => {
+      await release.promise
+      await route.continue().catch(() => undefined)
+    })
+    try {
+      await page.goto('/')
+      await expect.poll(() => page.locator('.sidebar .brand-mark').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+      await sampleOpen(page).click()
+      const artwork = page.locator('.book-loading-art')
+      const artworkSource = () => artwork.evaluate(image => (image as HTMLImageElement).currentSrc)
+      await expect.poll(artworkSource).toMatch(/loading-.*\.gif$/)
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await expect.poll(artworkSource).toMatch(/loading-still-.*\.webp$/)
+      release.resolve()
+      await expect(paper(page, 12)).toBeVisible()
+      await expect(artwork).toHaveCount(0)
+    } finally {
+      release.resolve()
+    }
+  })
 })
 
 async function createPdf(count: number) {

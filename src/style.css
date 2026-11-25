@@ -50,6 +50,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .brand-button:hover { background: var(--surface); }
 .brand { display: flex; align-items: center; gap: 11px; font-family: var(--serif); font-weight: 650; font-size: 32px; line-height: .85; letter-spacing: -.045em; }
 .brand-icon { display: inline-grid; place-items: center; width: 39px; height: 39px; color: var(--gold); background: var(--nav-active); border: 1px solid var(--nav-line); border-radius: 10px; }
+.brand-mark { width: 100%; height: 100%; object-fit: contain; border-radius: inherit; }
 .brand-dot { color: var(--gold); }
 .brand small { display: block; font: 600 8px 'Inter Variable', sans-serif; color: var(--quiet); letter-spacing: .16em; margin-top: 6px; }
 .side-content { flex: 1; padding: 27px 15px 14px; overflow-y: auto; scrollbar-width: thin; }
@@ -252,6 +253,13 @@ dialog::backdrop { background: #07090bd1; }
 .book-centering.compact { padding: 13px 8px; }
 .reader-state { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); padding: 24px; text-align: center; font-size: 14px; }
 .reader-state > svg { color: var(--gold); }
+.book-loading { display: grid; justify-items: center; gap: 10px; }
+.book-loading-art { display: block; width: min(145px, 40vw); max-height: 34vh; object-fit: contain; border-radius: 9px; }
+.reader-loading-splash {
+  display: grid; place-items: center; position: absolute; inset: 0; z-index: 8;
+  pointer-events: none; color: var(--muted);
+  background: radial-gradient(ellipse at center, var(--reading-glow), var(--bg) 80%);
+}
 .reader-state h2 { color: var(--text); font-size: 30px; }
 .reader-pane { display: flex; flex-direction: column; min-height: 0; width: 272px; flex: 0 0 272px; background: var(--side); border-right: 1px solid var(--border); z-index: 10; }
 .pane-heading { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 9px 0 15px; border-bottom: 1px solid var(--border); }

@@ -1,11 +1,33 @@
-import { useEffect, useRef, type ReactNode } from 'react'
-import { BookOpen, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { X } from 'lucide-react'
 import type { Book } from '../lib/model'
+import logo from '../assets/branding/logo.webp'
+import loadingAnimation from '../assets/branding/loading.gif?no-inline'
+import loadingStill from '../assets/branding/loading-still.webp?no-inline'
 
 const initialStyles = ['indigo', 'sand', 'ember', 'ocean', 'moss', 'violet']
 
 export function Logo() {
-  return <div className="brand"><span className="brand-icon"><BookOpen size={22} strokeWidth={1.6} /></span><span>Folio<span className="brand-dot">.</span><small>PDF READER</small></span></div>
+  return <div className="brand"><span className="brand-icon">
+    <img className="brand-mark" src={logo} alt="" />
+  </span><span>Folio<span className="brand-dot">.</span><small>PDF READER</small></span></div>
+}
+
+export function BookLoading({ message, reducedMotion }: { message: string; reducedMotion: boolean }) {
+  const [showArtwork, setShowArtwork] = useState(false)
+  const artwork = reducedMotion ? loadingStill : loadingAnimation
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowArtwork(true), 150)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  return <div className="book-loading" role="status">
+    {showArtwork ? <picture>
+      {!reducedMotion && <source media="(prefers-reduced-motion: reduce)" srcSet={loadingStill} />}
+      <img className="book-loading-art" src={artwork} alt="" decoding="async" />
+    </picture> : <span className="spinner" aria-hidden="true" />}
+    <span>{message}</span>
+  </div>
 }
 
 export function Cover({ book, className = '', lazy = false }: { book: Book; className?: string; lazy?: boolean }) {
