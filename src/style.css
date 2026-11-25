@@ -741,103 +741,111 @@ dialog::backdrop { background: #07090bd1; }
   .book-spine strong { font-size: 12px; }
 }
 
+
 .reading-companion {
+  --spirit-size: clamp(78px, 8vw, 112px);
   position: absolute;
-  bottom: 7px;
+  left: 8px;
   z-index: 9;
   display: grid;
-  justify-items: end;
-  gap: 8px;
+  grid-template-columns: minmax(0, max-content) var(--spirit-size);
+  justify-content: end;
+  align-items: center;
+  column-gap: 4px;
   pointer-events: none;
 }
-.companion-pet {
-  display: grid;
-  place-items: center;
-  width: 58px;
-  height: 58px;
-  border-radius: 14px;
-  pointer-events: auto;
-  transition: background .18s ease;
+.spirit-perch { position: relative; width: var(--spirit-size); height: var(--spirit-size); }
+.spirit-perch::before {
+  content: '';
+  position: absolute;
+  inset: auto 16% 9%;
+  height: 8%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #a3602299, #ca7b2c40 45%, transparent 72%);
 }
-.companion-pet:hover, .companion-pet:focus-visible { background: color-mix(in srgb, var(--surface) 86%, transparent); }
+.companion-pet {
+  display: block;
+  position: absolute;
+  inset: -5% 0 5%;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
 .companion-sprite {
   display: block;
   width: 100%;
   height: 100%;
-  background: url('./assets/reading-companion.webp') center / contain no-repeat;
-  transform-origin: bottom center;
-  filter: drop-shadow(0 2px 3px #160b0866);
-  animation: companion-breathe 9s ease-in-out infinite;
+  background: url('./assets/folio-spirit.webp') 50% 0 / 300% 200% no-repeat;
+  transform-origin: 50% 77%;
+  animation: spirit-hover 5.4s ease-in-out infinite;
 }
-.companion-sprite:not([data-mood=reading]) {
-  background-image: url('./assets/reading-companion-poses.webp');
-  background-size: 300% 200%;
-  animation: companion-lean .65s ease-out both;
-}
-.companion-sprite[data-mood=curious] { background-position: 0 0; }
-.companion-sprite[data-mood=suspicious] { background-position: 50% 0; }
-.companion-sprite[data-mood=startled] {
-  background-position: 100% 0;
-  animation: companion-startle .55s cubic-bezier(.22,.7,.3,1) both;
-}
-.companion-sprite[data-mood=afraid] { background-position: 0 100%; animation: companion-crouch 1s ease-out both; }
-.companion-sprite[data-mood=amused] { background-position: 50% 100%; animation: companion-chuckle .65s ease-in-out 2; }
-.companion-sprite[data-mood=tender] { background-position: 100% 100%; animation: companion-settle .9s ease-out both; }
-@keyframes companion-breathe {
-  0%, 50%, 100% { transform: translateY(0) scale(1); }
-  66% { transform: translateY(-1.5px) scale(1.025); }
-  80% { transform: translateY(-.5px) scale(1.01); }
-}
-@keyframes companion-lean {
-  0% { transform: rotate(0); }
-  65% { transform: rotate(-5deg); }
-  100% { transform: rotate(-2deg); }
-}
-@keyframes companion-startle {
-  25% { transform: translateY(-7px) scale(1.055); }
-  67% { transform: scaleY(.93); }
-}
-@keyframes companion-crouch {
-  35% { transform: translateX(2px) scaleY(.92); }
-  64% { transform: translateX(-1px) scaleY(.95); }
-}
-@keyframes companion-chuckle {
-  40% { transform: translateY(-2px) rotate(-3deg); }
-  72% { transform: scaleY(.94); }
-}
-@keyframes companion-settle {
-  40% { transform: scale(1.025); }
-}
+.companion-sprite[data-mood=curious] { background-position: 0 0; animation-name: spirit-peek; }
+.companion-sprite[data-mood=sleepy] { background-position: 100% 0; animation-duration: 8s; }
+.companion-sprite[data-mood=focused] { background-position: 0 100%; }
+.companion-sprite[data-mood=surprised] { background-position: 50% 100%; animation: spirit-startle .64s ease-out, spirit-hover 5s .64s ease-in-out infinite; }
+.companion-sprite[data-mood=encouraging] { background-position: 100% 100%; }
+.companion-sprite[data-beat=humor] { animation: spirit-laugh .55s ease-in-out 2, spirit-hover 5.4s 1.1s ease-in-out infinite; }
+.companion-sprite:is([data-beat=danger], [data-beat=unease]) { animation: spirit-shiver 1.1s ease-in-out, spirit-hover 6s 1.1s ease-in-out infinite; }
+.companion-sprite[data-beat=grief] { animation: spirit-bow 5s ease-in-out infinite; }
+@keyframes spirit-shiver { 25%, 55% { transform: translateX(-2px) scale(.96); } 40%, 70% { transform: translateX(1px) scale(.97); } }
+@keyframes spirit-bow { 50% { transform: translateY(2px) rotate(-4deg); } }
+@keyframes spirit-hover { 50% { transform: translateY(-3px) rotate(1.3deg); } }
+@keyframes spirit-peek { 50% { transform: translateY(-2px) rotate(-4deg); } }
+@keyframes spirit-startle { 28% { transform: translateY(-6px) rotate(3deg); } 70% { transform: translateY(1px) scaleY(.97); } }
+@keyframes spirit-laugh { 45% { transform: translateY(-3px) rotate(-3deg); } }
 .companion-still .companion-sprite { animation: none; }
-.companion-voice:empty { position: absolute; }
-.companion-bubble {
+.spirit-toggle {
+  position: absolute;
+  right: 0;
+  bottom: -4px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  color: #ffdda0;
+  border-radius: 50%;
   pointer-events: auto;
-  text-align: left;
+  background: radial-gradient(circle, #473323 24%, #32241e 43%, #ecc58a 46%, transparent 49%);
+}
+.spirit-toggle:is(:hover, [aria-expanded=true]) { color: white; }
+.companion-voice { min-width: 0; max-width: min(248px, 100%); justify-self: end; }
+.spirit-speech, .spirit-prompts {
   position: relative;
   width: max-content;
-  max-width: min(215px, calc(100vw - 24px));
-  margin-right: 5px;
-  padding: 8px 11px;
-  border: 1px solid color-mix(in srgb, var(--gold) 34%, var(--border));
-  border-radius: 12px 12px 5px 12px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 5px 20px #0004;
-  font: 17px/1.2 var(--serif);
+  max-width: 100%;
+  border: 1px solid #d7a86b;
+  border-radius: 18px;
+  color: #fff6e8;
+  background: linear-gradient(150deg, #423229, #251d19 72%);
+  box-shadow: inset 0 0 9px #e8b27022, 0 4px 16px #23140845;
+  pointer-events: auto;
 }
-.companion-bubble::after {
+.spirit-speech { width: fit-content; max-width: min(248px, 100%); }
+.spirit-speech::after {
   content: '';
   position: absolute;
-  right: 13px;
-  bottom: -4px;
-  width: 7px;
-  height: 7px;
-  border-right: inherit;
-  border-bottom: inherit;
-  background: inherit;
-  transform: rotate(45deg);
+  top: 58%;
+  right: -5px;
+  width: 8px;
+  height: 8px;
+  border: solid #d7a86b;
+  border-width: 1px 1px 0 0;
+  transform: rotate(45deg) skew(12deg, 12deg);
+  background: #2b211b;
+  pointer-events: none;
 }
+.companion-bubble { display: block; padding: 10px 14px; color: inherit; text-align: left; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; border-radius: inherit; }
+.spirit-answer { margin: 0 12px 8px; color: #ffda9c; text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
+.spirit-prompts { position: absolute; right: 6px; bottom: 100%; padding: 5px; }
+.spirit-prompts button { display: flex; align-items: center; width: 100%; gap: 10px; border-radius: 11px; padding: 8px 12px; font-size: 14px; color: inherit; text-align: left; }
+.spirit-prompts svg { width: 15px; height: 15px; color: #efc684; }
+.spirit-prompts button:hover:enabled { background: #fff1d714; }
 @media (max-width: 640px) {
-  .companion-pet { width: 48px; height: 48px; }
-  .companion-bubble { max-width: min(180px, calc(100vw - 24px)); font-size: 16px; }
+  .reading-companion { --spirit-size: 80px; }
+  .companion-voice { max-width: min(192px, 100%); }
+  .companion-bubble { font-size: 13px; padding: 9px 12px; }
 }

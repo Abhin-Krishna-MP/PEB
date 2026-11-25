@@ -170,7 +170,7 @@ export default function Reader({ book, file, close, password, toast }: { book: B
       let lastUpdate = performance.now()
       try {
         for (let index = 1; index <= pdf.numPages && live; index++) {
-          const match = await readPage(index)
+          const match = (await readPage(index)).replace(/\s+/g, ' ')
           if (!live) return
           foundText ||= !!match
           const pos = match.toLocaleLowerCase().indexOf(needle)
@@ -257,9 +257,12 @@ export default function Reader({ book, file, close, password, toast }: { book: B
     void edit(book.id, { annotations }).catch(() => toast('Could not save your reading marks.'))
   }
   const marked = book.annotations.find(item => item.kind === 'bookmark' && item.page === page)
+  const saveBookmark = useCallback(async () => {
+    if (!marked) await edit(book.id, { annotations: [...book.annotations, { kind: 'bookmark', id: crypto.randomUUID(), text: '', page }] })
+  }, [book.id, book.annotations, page, marked, edit])
   function toggleBookmark() {
     if (marked) writeAnnotations(book.annotations.filter(item => item.id !== marked.id))
-    else writeAnnotations([...book.annotations, { kind: 'bookmark', id: crypto.randomUUID(), text: '', page }])
+    else void saveBookmark().catch(() => toast('Could not save your reading marks.'))
   }
   function highlight() {
     const selection = window.getSelection()
@@ -399,9 +402,10 @@ export default function Reader({ book, file, close, password, toast }: { book: B
       {!firstPageSettled && !error && <div className="reader-loading-splash">
         <BookLoading message={loading > 0 && !pdf ? `Loading your book · ${loading}%` : 'Loading your book…'} reducedMotion={reduced} />
       </div>}
-      <ReadingCompanion page={page} mode={preferences.companion}
+      <ReadingCompanion page={page} total={total} bookmarked={!!marked} saveBookmark={saveBookmark} mode={preferences.companion}
         available={firstPageSettled && !error && !focus && !pane && !controls && !note && !showExport}
-        reducedMotion={reduced} readPage={readPage} inset={Math.max(7, (size.width - width * leafCount) / 2 - 65)} />
+        reducedMotion={reduced} readPage={readPage} inset={Math.max(7, (size.width - width * leafCount) / 2 + 23)}
+        bottom={scrolling ? 8 : Math.max(8, (size.height - height) / 2 + 5)} />
     </div>
     {!focus && <footer className="reader-footer">
       {pdf && <>

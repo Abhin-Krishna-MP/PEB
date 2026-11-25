@@ -57,7 +57,27 @@ export async function inspectPdf(file: File, password: PasswordRequest, update: 
 
 export async function pageText(page: PDFPageProxy) {
   const content = await page.getTextContent()
-  return content.items.map(item => 'str' in item ? item.str : '').join(' ').replace(/\s+/g, ' ').trim()
+  const blocks: string[] = []
+  let words: string[] = []
+  let lastY = 0
+  let lastHeight = 0
+  for (const item of content.items) {
+    if (!('str' in item) || !item.str.trim()) continue
+    const y = item.transform[5]
+    const height = Math.abs(item.height)
+    const gap = Math.abs(y - lastY)
+    // Keep headings and distant text blocks separate, but rejoin wrapped lines.
+    if (words.length && height && lastHeight && gap > Math.min(height, lastHeight) * .65 &&
+      (gap > Math.max(height, lastHeight) * 1.85 || Math.abs(height - lastHeight) > Math.min(height, lastHeight) * .2)) {
+      blocks.push(words.join(' '))
+      words = []
+    }
+    words.push(item.str.trim().replace(/\s+/g, ' '))
+    lastY = y
+    lastHeight = height
+  }
+  if (words.length) blocks.push(words.join(' '))
+  return blocks.join('\n')
 }
 
 export type OutlineEntry = { title: string; page: number; depth: number }

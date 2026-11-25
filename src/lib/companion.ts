@@ -1,10 +1,10 @@
-export type KittenMood = 'curious' | 'suspicious' | 'startled' | 'afraid' | 'amused' | 'tender'
+export type SpiritMood = 'curious' | 'happy' | 'sleepy' | 'focused' | 'surprised' | 'encouraging'
 export type BeatKind = 'doubt' | 'deception' | 'surprise' | 'danger' | 'unease' | 'humor' | 'grief' | 'relief' | 'warmth'
-export type Reaction = { kind: BeatKind; mood: KittenMood; strength: number; stamp: string; line: string }
+export type Reaction = { kind: BeatKind; mood: SpiritMood; strength: number; stamp: string; line: string }
 
 type Beat = {
   kind: BeatKind
-  mood: KittenMood
+  mood: SpiritMood
   score: number
   stamp: string
   name?: string
@@ -22,44 +22,44 @@ type ReactionContext = {
 
 const sentences = new Intl.Segmenter('en', { granularity: 'sentence' })
 
-const signals: { kind: BeatKind; mood: KittenMood; strong: RegExp; supporting: RegExp }[] = [
+const signals: { kind: BeatKind; mood: SpiritMood; strong: RegExp; supporting: RegExp }[] = [
   {
-    kind: 'unease', mood: 'afraid',
+    kind: 'unease', mood: 'surprised',
     strong: /\b(?:couldn['’]t shake the feeling|something wasn['’]t right|glanced over (?:his|her|their) shoulder|kept looking over (?:his|her|their) shoulder|(?:he|she|they) waited in silence)\b/i,
     supporting: /\b(?:uneasy|nervous|no answer|long silence|inched closer)\b/i,
   },
   {
-    kind: 'danger', mood: 'afraid',
+    kind: 'danger', mood: 'surprised',
     strong: /\b(?:heart (?:pounded|hammered|raced)|blood ran cold|(?:he|she|they) froze|held (?:his|her|their) breath|(?:footsteps|breathing) (?:behind|outside|above|approached)|don['’]t move|something (?:moved|scratched|stirred) in the dark|hands? (?:shook|trembled)|(?:shrieked|screamed) in (?:fear|terror))\b/i,
     supporting: /\b(?:terror|terrified|frightened|screamed|trembled|shivered|terrifying|cowering|door creaked|in the dark|couldn['’]t breathe)\b/i,
   },
   {
-    kind: 'deception', mood: 'suspicious',
+    kind: 'deception', mood: 'focused',
     strong: /\b(?:hid (?:the|a|his|her|their)|concealed (?:the|a|his|her|their)|(?:wouldn['’]t|would not|refused to) meet (?:his|her|their) eyes|(?:answered|replied|spoke) too quickly|changed (?:the subject|his story|her story|their story)|(?:lied|lying) about|slipped .{3,40} into (?:his|her|their) pocket)\b/i,
     supporting: /\b(?:suspicious|whispered|secret|excuse|pretended|averted|unopened)\b/i,
   },
   {
-    kind: 'surprise', mood: 'startled',
+    kind: 'surprise', mood: 'surprised',
     strong: /\b(?:gasped|without warning|couldn['’]t believe (?:his|her|their|what)|(?:door|window) (?:flew|burst) open|out of nowhere|was supposed to be dead|there (?:he|she|they) stood)\b/i,
     supporting: /\b(?:suddenly|unexpectedly|startled|stared in disbelief|to (?:his|her|their) surprise)\b/i,
   },
   {
-    kind: 'humor', mood: 'amused',
+    kind: 'humor', mood: 'happy',
     strong: /\b(?:burst (?:out laughing|into laughter)|couldn['’]t stop laughing|laughed out loud|roared with laughter|stifled a laugh|snort(?:ed|ing) with laughter|giggled|deadpanned|chuckled|laughed)\b/i,
     supporting: /\b(?:joke|ridiculous|funny|absurd|grinned|with a wink|had to laugh)\b/i,
   },
   {
-    kind: 'grief', mood: 'tender',
+    kind: 'grief', mood: 'focused',
     strong: /\b(?:tears (?:fell|spilled|rolled|streamed)|choked back (?:tears|a sob)|whispered goodbye|never see (?:him|her|them) again|(?:he|she|they) sobbed|wept|empty chair at the table|couldn['’]t say goodbye)\b/i,
     supporting: /\b(?:grief|heartbroken|missed (?:him|her|them)|tears|sorrow|sadness|a lump in (?:his|her|their) throat)\b/i,
   },
   {
-    kind: 'relief', mood: 'tender',
+    kind: 'relief', mood: 'encouraging',
     strong: /\b(?:sighed with relief|let out (?:the|a) breath|(?:was|were) finally safe|shoulders (?:relaxed|dropped)|thank goodness|made it home safely|it was only (?:a|the) )/i,
     supporting: /\b(?:safe at last|relief|the danger had passed|the worst was over)\b/i,
   },
   {
-    kind: 'warmth', mood: 'tender',
+    kind: 'warmth', mood: 'encouraging',
     strong: /\b(?:pulled (?:him|her|them) into a hug|wrapped (?:his|her|their) arms around|squeezed (?:his|her|their) hand|(?:he|she|they) forgave|finally smiled again)\b/i,
     supporting: /\b(?:tenderly|held hands|smiled softly|hugged|kindly|warm smile)\b/i,
   },
@@ -137,7 +137,7 @@ function linesFor(beat: Beat, previous?: BeatKind): string[] {
     case 'danger':
       return [
         detail ? `The ${detail} ${detail.endsWith('footsteps') ? 'are' : 'is'} making me nervous…` : 'Oh no… I’m holding my breath.',
-        'I just tucked my tail in.',
+        'I just tucked my wings in.',
         'I’m bracing myself for the next bit.',
       ]
     case 'unease':
@@ -148,7 +148,7 @@ function linesFor(beat: Beat, previous?: BeatKind): string[] {
       return ['Oh… that one hurt a little.', name ? `Poor ${name}. I need a second.` : 'I think I need a second.']
     case 'relief':
       return previous === 'danger' || previous === 'unease' || previous === 'surprise'
-        ? ['Oh, thank goodness. I can breathe again.', 'Okay… my tail can come out now.']
+        ? ['Oh, thank goodness. I can breathe again.', 'Okay… I can unfold my wings now.']
         : ['Phew. That’s a relief.', 'Oh, good. I was getting worried.']
     case 'warmth':
       return ['Aww. I’m glad that happened.', name ? `Oh, ${name}. That was sweet.` : 'That made me smile.']
