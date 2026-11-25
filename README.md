@@ -22,10 +22,10 @@ After the first production visit, allow the service worker to finish caching bef
 
 ## Reading
 
-- Use the arrow buttons or arrow keys to turn pages. Home and End jump to the boundaries. Drag an outer edge, tap an outer edge, or swipe on a touch screen. Pinch to zoom. Reader options include automatic, single-page, double-page, and scrolling layouts.
+- Use the arrow buttons or arrow keys to turn pages. Home and End jump to the boundaries. Drag an outer corner to curl the page, or tap an edge or swipe on a touch screen. Pinch to zoom. Reader options include automatic, single-page, double-page, and scrolling layouts.
 - Enter a page number in the footer and press Enter. Use the pages sidebar for thumbnails or Reader options for the embedded PDF outline. The search panel indexes the full PDF and marks matching passages in the reader.
 - Bookmark a page from the footer or annotations panel. Create or edit page notes in that panel. To highlight text, select a passage inside one page, then choose **Highlight selection** under Reader options.
-- Original theme preserves the PDF's appearance. Light, Sepia, and Dark apply reversible visual filters. Image-only PDFs remain readable but require an existing OCR text layer for selectable text, highlighting, and search. Password-protected uploads retain the original encrypted bytes. Folio asks for the password when they are reopened.
+- Use the sun or moon in the library toolbar to switch app appearance. The palette button in the reader previews the separate reading themes. Original preserves the PDF's appearance. Light, Sepia, and Dark apply reversible visual filters. Image-only PDFs remain readable but require an existing OCR text layer for selectable text, highlighting, and search. Password-protected uploads retain the original encrypted bytes. Folio asks for the password when they are reopened.
 - Use the book menu to rename, move, or delete documents. The heart toggles favorites. Collections are created from the sidebar or Collections screen. Settings reports browser storage usage and can request that the browser retain local data. Browser settings, private mode, quotas, and changes to the app's origin can affect access to a local library.
 - Choose **Export HTML flipbook** in Reader options to download a single file that opens offline in a browser. The export embeds rendered page images with navigation. Searchable text, bookmarks, and personal notes stay in Folio. Exports from password-protected PDFs contain unencrypted page images.
 

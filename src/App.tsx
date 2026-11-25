@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowDownUp, ArrowRight, BookOpen, Bookmark, Check, ChevronDown, Clock3, Database, Download, Ellipsis,
-  FileUp, Folder, Heart, LayoutGrid, LibraryBig, List, Menu, Pencil, Plus, Search, Settings as SettingsIcon,
-  ShieldCheck, Trash2, WifiOff, X,
+  FileUp, Folder, Heart, LayoutGrid, LibraryBig, List, Menu, Moon, Pencil, Plus, Search, Settings as SettingsIcon,
+  ShieldCheck, Sun, Trash2, WifiOff, X,
 } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Cover, Logo, Modal } from './components/Common'
@@ -26,7 +26,15 @@ type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<
 const currentBook = () => window.location.hash.slice(1) || null
 
 export default function App() {
-  const { books, collections, preferences, ready, init, add, edit, closeBook, collect, deleteCollection, clear } = useLibrary()
+  const { books, collections, preferences, ready, init, add, edit, closeBook, collect, deleteCollection, clear, configure } = useLibrary()
+  const [systemLight, setSystemLight] = useState(() => matchMedia('(prefers-color-scheme: light)').matches)
+  const lightAppearance = preferences.appearance === 'Light' || (preferences.appearance === 'System' && systemLight)
+  useEffect(() => {
+    const scheme = matchMedia('(prefers-color-scheme: light)')
+    const change = () => setSystemLight(scheme.matches)
+    scheme.addEventListener('change', change)
+    return () => scheme.removeEventListener('change', change)
+  }, [])
   const [view, setView] = useState('library')
   const [active, setActive] = useState(currentBook)
   const [query, setQuery] = useState('')
@@ -209,7 +217,7 @@ export default function App() {
     setDialog(undefined)
   }
 
-  return <div className={`app appearance-${preferences.appearance.toLowerCase()} ${preferences.reducedMotion ? 'reduce-motion' : ''}`} onDragOver={event => {
+  return <div className={`app appearance-${lightAppearance ? 'light' : 'dark'} ${preferences.reducedMotion ? 'reduce-motion' : ''}`} onDragOver={event => {
     if (event.dataTransfer.types.includes('Files') && !activeBook) { event.preventDefault(); setDragging(true) }
   }}>
     <input type="file" accept="application/pdf,.pdf" multiple hidden ref={files} onChange={event => { if (event.target.files) void importFiles(event.target.files) }} />
@@ -241,6 +249,9 @@ export default function App() {
             <div className="top-actions">
               <label className="search-box"><Search size={17} /><input ref={search} placeholder="Search your library…" aria-label="Search your library" value={query} onChange={event => { setQuery(event.target.value); if (view === 'settings') setView('library') }} />
                 {query ? <button className="icon-button" aria-label="Clear search" onClick={() => setQuery('')}><X size={15} /></button> : <kbd>Ctrl K</kbd>}</label>
+              <button className="icon-button" aria-label={lightAppearance ? 'Switch to dark appearance' : 'Switch to light appearance'} title={lightAppearance ? 'Switch to dark appearance' : 'Switch to light appearance'} onClick={() => persist(configure({ appearance: lightAppearance ? 'Dark' : 'Light' }))}>
+                {lightAppearance ? <Moon size={18} /> : <Sun size={18} />}
+              </button>
               <button className="primary-button upload-button" onClick={() => setDialog({ kind: 'upload' })} disabled={!ready || !!upload}><FileUp size={17} /><span>Upload PDF</span></button>
             </div>
           </header>

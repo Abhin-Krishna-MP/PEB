@@ -3,8 +3,9 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { adjacentPage, shouldFinishTurn, spreadStart } from '../lib/flip'
 import type { Annotation, Theme } from '../lib/model'
 import PdfPage from './PdfPage'
+import { pageCurl } from '../lib/pageCurl'
 
-type Turn = { target: number; forward: boolean; amount: number; settling: boolean }
+type Turn = { target: number; forward: boolean; amount: number; bottom: boolean; diagonal: number }
 interface Props {
   pdf: PDFDocumentProxy; page: number; change: (number: number) => void; registerNavigation: (handler: (direction: -1 | 1) => void) => void
   width: number; height: number; spread: boolean; motion: boolean; theme: Theme
@@ -14,9 +15,8 @@ interface Props {
 
 export default function FlipBook({ pdf, page, change, registerNavigation, width, height, spread, motion, theme, query, annotations, pinch, pinchScale, pan }: Props) {
   const [turn, setTurn] = useState<Turn>()
-  const timer = useRef(0)
   const frame = useRef(0)
-  const track = useRef<{ x: number; direction: -1 | 1; start: number; pointer: number; touch: boolean; target: number } | null>(null)
+  const track = useRef<{ x: number; bottom: boolean; direction: -1 | 1; start: number; pointer: number; touch: boolean; target: number } | null>(null)
   const panTrack = useRef<{ x: number; y: number; pointer: number } | null>(null)
   const touches = useRef(new Map<number, { x: number; y: number }>())
   const initialDistance = useRef(0)
@@ -24,19 +24,28 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
   const ignoreTouch = useRef(false)
   const current = spreadStart(page, spread)
 
-  function settle(target: number, direction: -1 | 1, complete: boolean, from = 0) {
-    if (timer.current) return
+  function settle(target: number, direction: -1 | 1, complete: boolean, from?: Turn) {
+    if (frame.current) return
     if (!motion) { if (complete) change(target); setTurn(undefined); return }
-    const data = { target, forward: direction > 0 }
-    setTurn({ ...data, amount: from, settling: false })
-    frame.current = requestAnimationFrame(() => {
-      frame.current = requestAnimationFrame(() => setTurn({ ...data, amount: complete ? 1 : 0, settling: true }))
-    })
-    timer.current = window.setTimeout(() => {
-      timer.current = 0
-      setTurn(undefined)
-      if (complete) change(target)
-    }, 445)
+    const start = from?.amount ?? 0
+    const finish = complete ? 1 : 0
+    const duration = Math.max(180, 740 * Math.abs(finish - start))
+    const geometry = { target, forward: direction > 0, bottom: from?.bottom ?? true, diagonal: from?.diagonal ?? .38 }
+    const since = performance.now()
+    function animate(now: number) {
+      const time = Math.min(1, (now - since) / duration)
+      const ease = time < .5 ? 2 * time * time : 1 - (-2 * time + 2) ** 2 / 2
+      if (time < 1) {
+        setTurn({ ...geometry, amount: start + (finish - start) * ease })
+        frame.current = requestAnimationFrame(animate)
+      } else {
+        frame.current = 0
+        setTurn(undefined)
+        if (complete) change(target)
+      }
+    }
+    setTurn({ ...geometry, amount: start })
+    frame.current = requestAnimationFrame(animate)
   }
 
   function navigate(direction: -1 | 1) {
@@ -44,14 +53,13 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
     if (target !== page) settle(target, direction, true)
   }
   useEffect(() => { registerNavigation(navigate) })
-  useEffect(() => () => { window.clearTimeout(timer.current); cancelAnimationFrame(frame.current) }, [])
+  useEffect(() => () => cancelAnimationFrame(frame.current), [])
   useEffect(() => {
-    window.clearTimeout(timer.current)
     cancelAnimationFrame(frame.current)
-    timer.current = 0
+    frame.current = 0
     track.current = null
     setTurn(undefined)
-  }, [page, spread])
+  }, [page, spread, motion])
   useEffect(() => {
     const next = adjacentPage(page, 1, spread, pdf.numPages)
     const previous = adjacentPage(page, -1, spread, pdf.numPages)
@@ -74,6 +82,7 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
     const localX = event.clientX - rect.left
     const nearLeft = localX < 53
     const nearRight = localX > rect.width - 53
+    const bottom = event.clientY > rect.top + rect.height / 2
     if (touch) {
       touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
       event.currentTarget.setPointerCapture(event.pointerId)
@@ -83,7 +92,7 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
         ignoreTouch.current = true
         track.current = null
         panTrack.current = null
-        if (!timer.current) setTurn(undefined)
+        if (!frame.current) setTurn(undefined)
         return
       }
       if (pan && !nearLeft && !nearRight) {
@@ -91,10 +100,10 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
         return
       }
     }
-    if (timer.current || event.button !== 0 || (!touch && !nearLeft && !nearRight)) return
+    if (frame.current || event.button !== 0 || (!touch && !nearLeft && !nearRight)) return
     if (!touch) event.currentTarget.setPointerCapture(event.pointerId)
     const direction = localX < rect.width / 2 ? -1 : 1
-    track.current = { x: event.clientX, pointer: event.pointerId, direction, start: performance.now(), touch, target: adjacentPage(page, direction, spread, pdf.numPages) }
+    track.current = { x: event.clientX, pointer: event.pointerId, bottom, direction, start: performance.now(), touch, target: adjacentPage(page, direction, spread, pdf.numPages) }
   }
   function move(event: ReactPointerEvent<HTMLDivElement>) {
     if (touches.current.has(event.pointerId)) {
@@ -119,7 +128,10 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
     drag.target = adjacentPage(page, drag.direction, spread, pdf.numPages)
     if (drag.target === page || !motion) return
     const amount = Math.max(0, Math.min(.92, -dx * drag.direction / width))
-    if (amount > .013 || turn) setTurn({ target: drag.target, forward: drag.direction > 0, amount, settling: false })
+    const rect = event.currentTarget.getBoundingClientRect()
+    const cornerDistance = drag.bottom ? rect.bottom - event.clientY : event.clientY - rect.top
+    const diagonal = Math.max(.12, Math.min(.9, cornerDistance / rect.height * 1.9))
+    if (amount > .013 || turn) setTurn({ target: drag.target, forward: drag.direction > 0, amount, bottom: drag.bottom, diagonal })
   }
   function release(event: ReactPointerEvent<HTMLDivElement>, cancelled = false) {
     touches.current.delete(event.pointerId)
@@ -137,22 +149,26 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
     const corner = Math.min(event.clientX - rect.left, rect.right - event.clientX) < 54
     const distance = (drag.x - event.clientX) * drag.direction
     const complete = !cancelled && (shouldFinishTurn(distance, width, performance.now() - drag.start) || (corner && Math.abs(distance) < 7))
-    if (turn || complete) settle(drag.target, drag.direction, complete, turn?.amount)
+    if (turn || complete) settle(drag.target, drag.direction, complete, turn)
   }
   const style = { '--leaf-width': width + 'px', '--leaf-height': height + 'px', scale: pinchScale === 1 ? undefined : pinchScale } as CSSProperties
   const renderPage = (number: number, withText: boolean) =>
     number <= pdf.numPages ? <PdfPage pdf={pdf} number={number} width={width} height={height} theme={theme} text={withText} query={withText ? query : ''} annotations={annotations} /> : <div className={`blank-paper paper-${theme.toLowerCase()}`} />
   const target = turn && spreadStart(turn.target, spread)
-  return <div className={`flipbook ${spread ? 'spread' : 'single'}`} style={style} onPointerDown={down} onPointerMove={move} onPointerUp={event => release(event)} onPointerCancel={event => release(event, true)}>
+  const curl = turn && pageCurl(width, height, turn.amount, turn.forward, turn.bottom, turn.diagonal)
+  const turningRightLeaf = spread && turn?.forward
+  const curlStyle = curl && { '--fold-angle': curl.angle, '--crease': curl.crease } as CSSProperties
+  return <div className={`flipbook ${spread ? 'spread' : 'single'}`} data-theme={theme.toLowerCase()} style={style} onPointerDown={down} onPointerMove={move} onPointerUp={event => release(event)} onPointerCancel={event => release(event, true)}>
+    {turn && target && curl && <div className="turn-layer turn-underneath leaf" data-right={turningRightLeaf} style={curlStyle} aria-hidden="true" inert>
+      {renderPage(target + (turningRightLeaf ? 1 : 0), false)}
+    </div>}
     <div className="spread-pages">
-      <div className="leaf">{renderPage(current, true)}</div>
-      {spread && <div className="leaf">{renderPage(current + 1, true)}</div>}
+      <div className="leaf" style={curl && !turningRightLeaf ? { ...curlStyle, clipPath: curl.stationary } : undefined}>{renderPage(current, true)}</div>
+      {spread && <div className="leaf" style={curl && turningRightLeaf ? { ...curlStyle, clipPath: curl.stationary } : undefined}>{renderPage(current + 1, true)}</div>}
     </div>
-    {turn && target && <div className="turn-layer" aria-hidden="true" inert>
-      <div className="turn-underneath" data-forward={turn.forward}>{renderPage(target + (spread && turn.forward ? 1 : 0), false)}</div>
-      <div className={`turn-leaf ${turn.settling ? 'settling' : ''}`} data-forward={turn.forward} style={{ '--turn': turn.amount } as CSSProperties}>
-        <div className="turn-front">{renderPage(current + (spread && turn.forward ? 1 : 0), false)}</div>
-        <div className="turn-back">{renderPage(target + (spread && !turn.forward ? 1 : 0), false)}</div>
+    {turn && target && curl && <div className="turn-layer turn-leaf" data-right={turningRightLeaf} style={{ ...curlStyle, transform: curl.reflection }} aria-hidden="true" inert>
+      <div className="turn-back" style={{ clipPath: curl.folded }}>
+        {spread && <div className="turn-back-print">{renderPage(target + (turn.forward ? 0 : 1), false)}</div>}
       </div>
     </div>}
   </div>

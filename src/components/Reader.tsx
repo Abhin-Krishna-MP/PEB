@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
-  ArrowLeft, BookOpen, Bookmark, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download,
-  Focus, Highlighter, ListTree, Maximize, Minimize, Minus, PanelLeft, Plus, Search, SlidersHorizontal, StickyNote, Trash2, X,
+  ArrowLeft, BookOpen, Bookmark, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download,
+  Focus, Highlighter, ListTree, Maximize, Minimize, Minus, Palette, PanelLeft, Plus, Search, SlidersHorizontal, StickyNote, Trash2, X,
 } from 'lucide-react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { clampPage, adjacentPage } from '../lib/flip'
@@ -13,14 +13,16 @@ import { Modal } from './Common'
 import FlipBook from './FlipBook'
 import PdfPage from './PdfPage'
 
-type Pane = 'pages' | 'outline' | 'search' | 'notes'
+type Pane = 'pages' | 'outline' | 'search' | 'notes' | 'theme'
 type SearchResult = { page: number; text: string }
 const defaultRatio = 460 / 625
-const paneLabels = { pages: 'Pages', outline: 'Table of contents', search: 'Search document', notes: 'Bookmarks & notes' }
+const paneLabels = { pages: 'Pages', outline: 'Table of contents', search: 'Search document', notes: 'Bookmarks & notes', theme: 'Reading theme' }
+const readingThemes: Theme[] = ['Original', 'Light', 'Sepia', 'Dark']
 
 export default function Reader({ book, close, password, toast }: { book: Book; close: () => void; password: PasswordRequest; toast: (message: string) => void }) {
   const preferences = useLibrary(state => state.preferences)
   const edit = useLibrary(state => state.edit)
+  const configure = useLibrary(state => state.configure)
   const [pdf, setPdf] = useState<PDFDocumentProxy>()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(0)
@@ -28,7 +30,7 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
   const [jumpField, setJumpField] = useState(String(book.page))
   const [pane, setPane] = useState<Pane>()
   const [thumbOffset, setThumbOffset] = useState(0)
-  const [theme, setTheme] = useState<Theme>(preferences.theme)
+  const theme = preferences.theme
   const [mode, setMode] = useState<Mode>(preferences.mode)
   const [fit, setFit] = useState<Fit>(preferences.fit)
   const [zoom, setZoom] = useState(preferences.zoom)
@@ -287,9 +289,9 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
         {readerButton('Page thumbnails', PanelLeft, () => togglePane('pages'), pane === 'pages')}
         {readerButton('Search document', Search, () => togglePane('search'), pane === 'search')}
         {readerButton('Bookmarks and notes', Bookmark, () => togglePane('notes'), pane === 'notes')}
+        {readerButton('Reading theme', Palette, () => togglePane('theme'), pane === 'theme')}
         <div className="reader-options">{readerButton('Reader options', SlidersHorizontal, () => setControls(!controls), controls, true)}
           {controls && <><button className="menu-scrim" aria-label="Close reader options" onClick={() => setControls(false)} /><div className="dropdown options-popup">
-            <label>Reading theme<select value={theme} onChange={event => setTheme(event.target.value as Theme)}>{['Original', 'Light', 'Sepia', 'Dark'].map(value => <option key={value}>{value}</option>)}</select></label>
             <label>Reading mode<select value={mode} onChange={event => setMode(event.target.value as Mode)}>{['Auto', 'Single page', 'Double page', 'Scroll'].map(value => <option key={value}>{value}</option>)}</select></label>
             <label>Page fit<select value={fit} onChange={event => setFit(event.target.value as Fit)}><option>Fit page</option><option>Fit width</option></select></label>
             <button onClick={() => togglePane('outline')}><ListTree size={17} /> Table of contents</button>
@@ -311,6 +313,14 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
               <PdfPage pdf={pdf} number={number} width={76} height={105} text={false} thumbnail /><span>{number}</span>
             </button>)}
           </div>
+        </div>}
+        {pane === 'theme' && <div className="pane-content">
+          <div className="theme-grid">{readingThemes.map(option => <button key={option} className="theme-choice" aria-pressed={theme === option} onClick={() => {
+            void configure({ theme: option }).catch(() => toast('Could not save your reading theme.'))
+          }}>
+            <span className={`theme-swatch swatch-${option.toLowerCase()}`} aria-hidden="true">Aa{theme === option && <Check size={15} />}</span>
+            {option}
+          </button>)}</div>
         </div>}
         {pane === 'outline' && <div className="pane-content">
           {contents?.length ? contents.map((item, index) => <button className="pane-row" key={index} onClick={() => jump(item.page)} style={{ paddingInlineStart: 12 + item.depth * 12 }}><span>{item.title}</span><small>{item.page}</small></button>) : <p className="muted">{contents ? 'This PDF has no embedded table of contents.' : 'Loading table of contents…'}</p>}
