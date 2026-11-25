@@ -14,6 +14,7 @@ export type Book = {
   title: string
   category: string
   pages: number
+  aspectRatio?: number
   size: number
   cover: string
   sample?: string

@@ -1,18 +1,29 @@
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
+import { Activity, lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
-  ArrowDownUp, ArrowRight, BookOpen, Bookmark, Check, ChevronDown, Clock3, Code2, Crown, Database, Download, Ellipsis,
-  FileText, FileUp, Folder, Heart, House, LayoutGrid, LibraryBig, List, Menu, Monitor, Moon, Pencil, Plus, Search, Settings as SettingsIcon,
+  ArrowDownUp, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Code2, Crown, Database, Download,
+  FileText, FileUp, Folder, Heart, House, LayoutGrid, LibraryBig, List, Menu, Monitor, Moon, Plus, Search, Settings as SettingsIcon,
   ShieldCheck, Sigma, SlidersHorizontal, Sun, Trash2, UserRound, Wifi, WifiOff, X,
 } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Cover, Logo, Modal } from './components/Common'
 import Settings from './components/Settings'
-import BookSpine from './components/BookSpine'
+import BookCard, { type BookAction } from './components/BookCard'
 import { fileSize, progress, type Book, type LibraryLayout } from './lib/model'
 import { useLibrary } from './lib/store'
+import { readFile } from './lib/storage'
 import type { PasswordRequest } from './lib/pdf'
+import { currentBook, useReaderRoute } from './lib/readerRoute'
+import { ReaderBoundary } from './components/ReaderBoundary'
 
-const Reader = lazy(() => import('./components/Reader'))
+let readerModule: Promise<typeof import('./components/Reader')> | undefined
+function loadReader() {
+  return readerModule ??= import('./components/Reader').catch(error => {
+    readerModule = undefined
+    throw error
+  })
+}
+const Reader = lazy(loadReader)
+const warmReader = () => { void loadReader().catch(() => undefined) }
 const navigation = [
   { key: 'library', label: 'Library', icon: LibraryBig },
   { key: 'collections', label: 'Collections', icon: Folder },
@@ -34,7 +45,7 @@ const heading: Record<string, string> = {
 }
 type Dialog = { kind: 'upload' | 'install' | 'clear' | 'collection' | 'filter' } | { kind: 'delete' | 'rename' | 'move'; book: Book } | { kind: 'deleteCollection'; id: string }
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
-const currentBook = () => window.location.hash.slice(1) || null
+type PasswordPrompt = { incorrect: boolean; bookId?: string; resolve: (value: string | null) => void }
 
 export default function App() {
   const { books, collections, preferences, ready, init, add, edit, closeBook, collect, deleteCollection, clear, configure } = useLibrary()
@@ -47,14 +58,13 @@ export default function App() {
     return () => scheme.removeEventListener('change', change)
   }, [])
   const [view, setView] = useState('library')
-  const [active, setActive] = useState(currentBook)
+  const { active, open: openReader, close: closeReader } = useReaderRoute()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('added')
   const [category, setCategory] = useState('')
   const layout = preferences.libraryLayout
   const onShelves = layout === 'shelves'
   const [menu, setMenu] = useState<string>()
-  const [menuAtStart, setMenuAtStart] = useState(false)
   const [mobile, setMobile] = useState(false)
   const [dialog, setDialog] = useState<Dialog>()
   const [message, setMessage] = useState('')
@@ -64,23 +74,24 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState<InstallPrompt>()
   const [usage, setUsage] = useState(0)
   const [quota, setQuota] = useState(0)
-  const [password, setPassword] = useState<{ incorrect: boolean; resolve: (value: string | null) => void }>()
+  const [password, setPassword] = useState<PasswordPrompt>()
+  const pendingPassword = useRef<PasswordPrompt | undefined>(undefined)
   const search = useRef<HTMLInputElement>(null)
   const files = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<number>(0)
   const importing = useRef(false)
   const importUnlock = useRef<{ id: string; value: string } | null>(null)
+  const openingFile = useRef<{ id: string; source: Promise<Blob>; controller: AbortController } | null>(null)
   const { needRefresh: [updates], updateServiceWorker } = useRegisterSW()
   const activeBook = books.find(book => book.id === active)
 
-  function toast(text: string) {
+  const toast = useCallback((text: string) => {
     setMessage(text)
     window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setMessage(''), 4400)
-  }
+  }, [])
   useEffect(() => { void init().catch(() => toast('Local storage could not be opened. Check your browser settings.')) }, [init])
   useEffect(() => {
-    const onHash = () => setActive(currentBook())
     const onConnection = () => setOnline(navigator.onLine)
     const onInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPrompt) }
     const onForeground = () => {
@@ -95,14 +106,12 @@ export default function App() {
       }
       if (event.key === 'Escape') setMenu(undefined)
     }
-    window.addEventListener('hashchange', onHash)
     window.addEventListener('online', onConnection)
     window.addEventListener('offline', onConnection)
     window.addEventListener('beforeinstallprompt', onInstall)
     window.addEventListener('keydown', onKeys)
     document.addEventListener('visibilitychange', onForeground)
     return () => {
-      window.removeEventListener('hashchange', onHash)
       window.removeEventListener('online', onConnection)
       window.removeEventListener('offline', onConnection)
       window.removeEventListener('beforeinstallprompt', onInstall)
@@ -116,27 +125,63 @@ export default function App() {
       setQuota(value.quota ?? 0)
     }).catch(() => undefined)
   }, [books.length])
-  const askPassword: PasswordRequest = incorrect => new Promise(resolve => setPassword({ incorrect, resolve }))
+  useEffect(() => {
+    const pending = pendingPassword.current
+    if (pending?.bookId && pending.bookId !== active) resolvePassword(null)
+    if (importUnlock.current && importUnlock.current.id !== active) importUnlock.current = null
+    if (openingFile.current && openingFile.current.id !== active) {
+      openingFile.current.controller.abort()
+      openingFile.current = null
+    }
+  }, [active])
+  useEffect(() => {
+    if (ready && active && !activeBook) closeReader()
+  }, [ready, active, activeBook, closeReader])
+
+  function askPassword(incorrect: boolean, bookId?: string): Promise<string | null> {
+    if (bookId && bookId !== currentBook()) return Promise.resolve(null)
+    return new Promise(resolve => {
+      pendingPassword.current = { incorrect, bookId, resolve }
+      setPassword(pendingPassword.current)
+    })
+  }
   const unlockBook: PasswordRequest = incorrect => {
     const remembered = importUnlock.current
     importUnlock.current = null
     if (!incorrect && remembered?.id === active) return Promise.resolve(remembered.value)
-    return askPassword(incorrect)
+    return askPassword(incorrect, active ?? undefined)
   }
   function resolvePassword(value: string | null) {
-    password?.resolve(value)
+    pendingPassword.current?.resolve(value)
+    pendingPassword.current = undefined
     setPassword(undefined)
   }
-  function openBook(book: Book) {
+  const persist = useCallback((task: Promise<void>, success?: string) => {
+    void task.then(() => { if (success) toast(success) }).catch(() => toast('Could not save the change to this device.'))
+  }, [toast])
+  const closeMenu = useCallback(() => setMenu(undefined), [])
+  const toggleMenu = useCallback((id: string) => setMenu(current => current === id ? undefined : id), [])
+  const favoriteBook = useCallback((book: Book) => persist(edit(book.id, { favorite: !book.favorite })), [edit, persist])
+  const actOnBook = useCallback((kind: BookAction, book: Book) => {
     setMenu(undefined)
-    setActive(book.id)
-    window.location.hash = book.id
+    setDialog({ kind, book })
+  }, [])
+  const openBook = useCallback((book: Book) => {
+    if (currentBook() === book.id) return
+    setMenu(undefined)
+    warmReader()
+    openingFile.current?.controller.abort()
+    const controller = new AbortController()
+    const source = readFile(book, controller.signal)
+    void source.catch(() => undefined)
+    openingFile.current = { id: book.id, source, controller }
+    openReader(book.id)
     persist(edit(book.id, { openedAt: Date.now() }))
-  }
+  }, [edit, openReader, persist])
   function exitReader() {
     importUnlock.current = null
-    history.replaceState(null, '', location.pathname + location.search)
-    setActive(null)
+    if (pendingPassword.current?.bookId) resolvePassword(null)
+    closeReader()
   }
   function navigate(key: string) {
     setView(key)
@@ -148,9 +193,6 @@ export default function App() {
   function changeLayout(value: LibraryLayout) {
     if (view === 'home' && value !== 'shelves') navigate('library')
     persist(configure({ libraryLayout: value }))
-  }
-  function persist(task: Promise<void>, success?: string) {
-    void task.then(() => { if (success) toast(success) }).catch(() => toast('Could not save the change to this device.'))
   }
   async function importFiles(selected: FileList | File[]) {
     if (importing.current || !selected.length || !ready) return
@@ -252,7 +294,14 @@ export default function App() {
     if (event.dataTransfer.types.includes('Files') && !activeBook) { event.preventDefault(); setDragging(true) }
   }}>
     <input type="file" accept="application/pdf,.pdf" multiple hidden ref={files} onChange={event => { if (event.target.files) void importFiles(event.target.files) }} />
-    {activeBook ? <Suspense fallback={<div className="center-screen">Opening your book…</div>}><Reader key={activeBook.id} book={activeBook} close={exitReader} password={unlockBook} toast={toast} /></Suspense> :
+    {activeBook && <ReaderBoundary key={activeBook.id} close={exitReader}>
+      <Suspense fallback={<div className="center-screen">
+        <div className="reader-state"><span role="status">Opening your book…</span><button className="secondary-button" onClick={exitReader}>Back to library</button></div>
+      </div>}>
+        <Reader book={activeBook} file={openingFile.current?.id === active ? openingFile.current?.source : undefined} close={exitReader} password={unlockBook} toast={toast} />
+      </Suspense>
+    </ReaderBoundary>}
+    <Activity mode={activeBook ? 'hidden' : 'visible'}>
       <div className={`shell ${onShelves ? 'bookshelf-shell' : ''}`}>
         {onShelves && <header className="shelf-masthead">
           <button className="masthead-brand" onClick={() => navigate('home')} aria-label="Folio home"><Logo /></button>
@@ -334,7 +383,7 @@ export default function App() {
                     <h2>{feature.title}</h2>
                     <div className="feature-status"><span>Page {feature.page} of {feature.pages}</span><span className="separator-dot" /><span>{progress(feature)}% complete</span></div>
                     <div className="feature-meter" role="progressbar" aria-label="Reading progress" aria-valuenow={progress(feature)}><i style={{ width: progress(feature) + '%' }} /></div>
-                    <button className="primary-button resume" onClick={() => openBook(feature)}>Resume reading <ArrowRight size={17} /></button>
+                    <button className="primary-button resume" onPointerEnter={warmReader} onFocus={warmReader} onClick={() => openBook(feature)}>Resume reading <ArrowRight size={17} /></button>
                   </div>
                   <div className="feature-visual"><Cover book={feature} /></div>
                 </section>}
@@ -362,31 +411,9 @@ export default function App() {
                     <p>{query ? 'Try another title or category.' : view === 'favorites' ? 'Use the heart on any book to save it here.' : collection ? 'Use a book’s menu to move it into this collection.' : 'Upload a PDF to start reading.'}</p>
                     {!query && view === 'library' && <button className="primary-button" onClick={() => setDialog({ kind: 'upload' })}><FileUp size={16} /> Upload PDF</button>}
                   </div>}
-                  <div className={`books ${layout}`} hidden={!rows.length}>{rows.map(book => <article className="book-card" key={book.id}>
-                    <div className={`book-stage ${book.art === undefined ? 'stage-imported' : 'stage-' + book.art}`}>
-                      <button className="cover-button" onClick={() => openBook(book)} aria-label={'Open ' + book.title} title={onShelves ? `${book.title} · ${book.pages} pages` : undefined}>
-                        {onShelves ? <BookSpine book={book} /> : <Cover book={book} />}
-                      </button>
-                      <button className={`heart-button ${book.favorite ? 'hearted' : ''}`} aria-label={`${book.favorite ? 'Remove from favorites' : 'Add to favorites'}: ${book.title}`} aria-pressed={book.favorite} onClick={() => persist(edit(book.id, { favorite: !book.favorite }))}><Heart size={16} /></button>
-                    </div>
-                    <div className="card-meta">{!onShelves && <div className="card-description"><button className="book-title" onClick={() => openBook(book)}>{book.title}</button><div className="book-details"><span>{book.pages} pages</span><i /><span>{book.size ? fileSize(book.size) : 'Sample PDF'}</span>{book.annotations.some(entry => entry.kind === 'bookmark') && <Bookmark size={13} aria-label="Bookmarked" />}</div>
-                      {layout === 'list' && book.openedAt > 1 && <div className="book-details">Opened {new Date(book.openedAt).toLocaleDateString()} · {progress(book)}% read</div>}
-                      {book.openedAt > 0 && <div className="card-progress" title={progress(book) + '% read'}><i style={{ width: progress(book) + '%' }} /></div>}
-                    </div>}<div className="card-menu"><button className="icon-button" aria-label={'Options for ' + book.title} aria-expanded={menu === book.id} onClick={event => {
-                      const shelf = event.currentTarget.closest('.shelves')
-                      const { left, right } = event.currentTarget.getBoundingClientRect()
-                      setMenuAtStart(!!shelf && right - shelf.getBoundingClientRect().left < 180 && document.documentElement.clientWidth - left >= 180)
-                      setMenu(menu === book.id ? undefined : book.id)
-                    }}><Ellipsis size={19} /></button>
-                      {menu === book.id && <><button className="menu-scrim" aria-label="Close book options" onClick={() => setMenu(undefined)} /><div className={`dropdown ${menuAtStart ? 'from-start' : ''}`}>
-                        <button onClick={() => openBook(book)}><BookOpen size={16} /> Open book</button>
-                        {onShelves && <button onClick={() => { setMenu(undefined); persist(edit(book.id, { favorite: !book.favorite })) }}><Heart size={16} /> {book.favorite ? 'Remove from favorites' : 'Add to favorites'}</button>}
-                        <button onClick={() => { setMenu(undefined); setDialog({ kind: 'rename', book }) }}><Pencil size={16} /> Rename</button>
-                        <button onClick={() => { setMenu(undefined); setDialog({ kind: 'move', book }) }}><Folder size={16} /> Move to collection</button>
-                        <button className="danger" onClick={() => { setMenu(undefined); setDialog({ kind: 'delete', book }) }}><Trash2 size={16} /> Delete</button>
-                      </div></>}
-                    </div></div>
-                  </article>)}
+                  <div className={`books ${layout}`} hidden={!rows.length}>
+                    {rows.map(book => <BookCard key={book.id} book={book} layout={layout} menuOpen={menu === book.id}
+                      open={openBook} warmReader={warmReader} favorite={favoriteBook} toggleMenu={toggleMenu} closeMenu={closeMenu} act={actOnBook} />)}
                     {onShelves && rows.length > 0 && <>
                       <img src="/shelf/vine.webp" alt="" className="shelf-decor shelf-vine" />
                       <img src={lightAppearance ? '/shelf/globe.webp' : '/shelf/hourglass.webp'} alt="" className="shelf-decor shelf-ornament" />
@@ -400,7 +427,8 @@ export default function App() {
             {!onShelves && <button className={view === 'settings' ? 'active' : ''} onClick={() => navigate('settings')}><SettingsIcon size={19} />Settings</button>}
           </footer>
         </div>
-      </div>}
+      </div>
+    </Activity>
     {dragging && <div className="drag-overlay" onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); void importFiles(event.dataTransfer.files) }}><FileUp size={40} /> Drop PDFs to add them to Folio</div>}
     {dialog && <Modal title={{ upload: 'Upload PDFs', install: 'Install Folio', filter: 'Filter books', clear: 'Clear your library?', collection: 'New collection', delete: 'Delete this book?', rename: 'Rename book', move: 'Move to collection', deleteCollection: 'Delete this collection?' }[dialog.kind]} close={() => setDialog(undefined)}>
       {dialog.kind === 'upload' ? <><button className="drop-zone" onClick={() => files.current?.click()} onDragOver={event => {
@@ -425,7 +453,7 @@ export default function App() {
           <div className="dialog-actions"><button className="secondary-button" type="button" onClick={() => setDialog(undefined)}>Cancel</button><button className="primary-button" type="submit">{dialog.kind === 'clear' ? 'Clear library' : dialog.kind.startsWith('delete') ? 'Delete' : 'Save'}</button></div>
         </form>}
     </Modal>}
-    {password && <Modal title="Unlock PDF" close={() => resolvePassword(null)}><form onSubmit={event => {
+    {password && (!password.bookId || password.bookId === active) && <Modal title="Unlock PDF" close={() => resolvePassword(null)}><form onSubmit={event => {
       event.preventDefault()
       resolvePassword(String(new FormData(event.currentTarget).get('password') ?? ''))
     }}><p className="muted">{password.incorrect ? 'That password was incorrect. Try again.' : 'This PDF is password-protected.'}</p><label>Password<input autoFocus key={String(password.incorrect)} name="password" type="password" required /></label><div className="dialog-actions"><button className="secondary-button" type="button" onClick={() => resolvePassword(null)}>Cancel</button><button className="primary-button" type="submit">Unlock</button></div></form></Modal>}

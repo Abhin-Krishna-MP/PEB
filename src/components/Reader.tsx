@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowLeft, BookOpen, Bookmark, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download,
   Focus, Highlighter, ListTree, Maximize, Minimize, Minus, Palette, PanelLeft, Plus, Search, SlidersHorizontal, StickyNote, Trash2, X,
@@ -11,7 +11,7 @@ import { useLibrary } from '../lib/store'
 import type { Annotation, Book, Fit, Mode, Theme } from '../lib/model'
 import { Modal } from './Common'
 import FlipBook from './FlipBook'
-import PdfPage from './PdfPage'
+import PdfPage, { clearPageRasters } from './PdfPage'
 
 type Pane = 'pages' | 'outline' | 'search' | 'notes' | 'theme'
 type SearchResult = { page: number; text: string }
@@ -19,7 +19,7 @@ const defaultRatio = 460 / 625
 const paneLabels = { pages: 'Pages', outline: 'Table of contents', search: 'Search document', notes: 'Bookmarks & notes', theme: 'Reading theme' }
 const readingThemes: Theme[] = ['Original', 'Light', 'Sepia', 'Dark']
 
-export default function Reader({ book, close, password, toast }: { book: Book; close: () => void; password: PasswordRequest; toast: (message: string) => void }) {
+export default function Reader({ book, file, close, password, toast }: { book: Book; file?: Promise<Blob>; close: () => void; password: PasswordRequest; toast: (message: string) => void }) {
   const preferences = useLibrary(state => state.preferences)
   const edit = useLibrary(state => state.edit)
   const configure = useLibrary(state => state.configure)
@@ -35,7 +35,7 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
   const [fit, setFit] = useState<Fit>(preferences.fit)
   const [zoom, setZoom] = useState(preferences.zoom)
   const [pinchScale, setPinchScale] = useState(1)
-  const [ratio, setRatio] = useState(defaultRatio)
+  const [ratio, setRatio] = useState(book.aspectRatio ?? defaultRatio)
   const [size, setSize] = useState({ width: 900, height: 620 })
   const [focus, setFocus] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
@@ -55,7 +55,6 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
   const thumbViewport = useRef<HTMLDivElement>(null)
   const passwordRef = useRef(password)
   const navigation = useRef<(direction: -1 | 1) => void>(null)
-  const suppressScroll = useRef(0)
   const texts = useRef(new Map<number, string>())
   const exporting = useRef<AbortController>(null)
   passwordRef.current = password
@@ -72,43 +71,52 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
   const height = Math.round(width / ratio)
   const needsPanning = width * leafCount + (compact ? 16 : 30) > size.width || height + (compact ? 26 : 48) > size.height
   const reduced = preferences.reducedMotion || systemReduce
+  const scrollStep = height + 18
+  const scrollWindow = Math.max(3, Math.ceil(size.height / scrollStep) + 1)
+  const firstVisible = Math.max(1, page - scrollWindow)
+  const lastVisible = Math.min(total, page + scrollWindow)
+  const scrollHeight = (total - 1) * scrollStep + Math.max(height, size.height - 30)
 
   useEffect(() => {
-    let disposed = false
+    const controller = new AbortController()
     let task: ReturnType<typeof loadPdf> | undefined
+    let document: PDFDocumentProxy | undefined
     async function open() {
-      const blob = await readFile(book)
+      const blob = await (file ?? readFile(book, controller.signal))
+      if (controller.signal.aborted) return
       const data = await blob.arrayBuffer()
-      if (disposed) return
-      task = loadPdf(data, incorrect => passwordRef.current(incorrect))
+      if (controller.signal.aborted) return
+      task = loadPdf(data, incorrect => controller.signal.aborted ? Promise.resolve(null) : passwordRef.current(incorrect))
       task.onProgress = ({ loaded, total: bytes }: { loaded: number; total: number }) => {
-        if (!disposed && bytes) setLoading(Math.min(99, Math.round(loaded / bytes * 100)))
+        if (!controller.signal.aborted && bytes) setLoading(Math.min(99, Math.round(loaded / bytes * 100)))
       }
-      const document = await task.promise
-      const first = await document.getPage(1)
-      if (disposed) return
-      const initial = first.getViewport({ scale: 1 })
-      setRatio(initial.width / initial.height)
-      setPdf(document)
-      const initialPages = [...new Set([1, Math.min(book.page, document.numPages), Math.min(2, document.numPages)])]
-      const items = await Promise.all(initialPages.map(async number => {
-        const text = await pageText(await document.getPage(number))
-        texts.current.set(number, text)
-        return text
-      }))
-      if (!disposed) setTextStatus(old => old === 'unknown' ? items.some(Boolean) ? 'available' : 'sample-empty' : old)
+      document = await task.promise
+      if (!book.aspectRatio && !book.sample) {
+        const first = await document.getPage(1)
+        const initial = first.getViewport({ scale: 1 })
+        if (!controller.signal.aborted) setRatio(initial.width / initial.height)
+      }
+      if (!controller.signal.aborted) setPdf(document)
     }
     void open().catch(value => {
-      if (!disposed && !task?.destroyed) setError(value instanceof Error ? value.message : 'This PDF could not be opened.')
+      if (!controller.signal.aborted) setError(value instanceof Error ? value.message : 'This PDF could not be opened.')
     })
-    return () => { disposed = true; void task?.destroy().catch(() => undefined) }
+    return () => {
+      controller.abort()
+      if (document) clearPageRasters(document)
+      void task?.destroy().catch(() => undefined)
+    }
   }, [book.id])
   useEffect(() => () => exporting.current?.abort(), [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = viewport.current
     if (!element) return
-    const observer = new ResizeObserver(([entry]) => setSize({ width: entry.contentRect.width, height: entry.contentRect.height }))
+    setSize({ width: element.clientWidth, height: element.clientHeight })
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      setSize(previous => previous.width === width && previous.height === height ? previous : { width, height })
+    })
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
@@ -127,15 +135,27 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
     return () => { live = false }
   }, [pane, pdf])
   useEffect(() => {
+    if (!pdf || pane !== 'search') return
     let live = true
     setResults([])
     setSearched(0)
     setSearchError('')
     const needle = query.toLocaleLowerCase().trim().replace(/\s+/g, ' ')
-    if (!pdf || !needle) return
+    if (!needle) {
+      if (textStatus === 'unknown') {
+        const numbers = [...new Set([1, clampPage(page, pdf.numPages)])]
+        void Promise.all(numbers.map(async number => {
+          const text = await pageText(await pdf.getPage(number))
+          if (live) texts.current.set(number, text)
+          return text
+        })).then(items => { if (live) setTextStatus(items.some(Boolean) ? 'available' : 'sample-empty') }).catch(() => undefined)
+      }
+      return () => { live = false }
+    }
     const timer = window.setTimeout(async () => {
       const found: SearchResult[] = []
       let foundText = false
+      let lastUpdate = performance.now()
       try {
         for (let index = 1; index <= pdf.numPages && live; index++) {
           const match = texts.current.get(index) ?? await pageText(await pdf.getPage(index))
@@ -144,7 +164,8 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
           foundText ||= !!match
           const pos = match.toLocaleLowerCase().indexOf(needle)
           if (pos >= 0) found.push({ page: index, text: (pos > 44 ? '…' : '') + match.slice(Math.max(0, pos - 44), pos + needle.length + 58) + (pos + needle.length + 58 < match.length ? '…' : '') })
-          if (index % 5 === 0 || index === pdf.numPages) {
+          if (performance.now() - lastUpdate >= 110 || index === pdf.numPages) {
+            lastUpdate = performance.now()
             setResults([...found])
             setSearched(index)
             await new Promise(resolve => window.setTimeout(resolve, 0))
@@ -154,15 +175,15 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
       } catch { if (live) setSearchError('PDF text could not be indexed.') }
     }, 200)
     return () => { live = false; window.clearTimeout(timer) }
-  }, [pdf, query])
+  }, [pdf, pane, query])
   useEffect(() => {
     if (pane !== 'pages' || !thumbViewport.current) return
     thumbViewport.current.scrollTop = Math.max(0, (page - 2) * 141)
     setThumbOffset(thumbViewport.current.scrollTop)
   }, [pane, page])
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pdf && scrolling) alignScroll(page)
-  }, [pdf, scrolling, height])
+  }, [pdf, scrolling, scrollStep, scrollHeight])
 
   function updatePage(number: number) {
     const next = clampPage(number, total)
@@ -172,8 +193,7 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
   }
   function alignScroll(number: number) {
     if (!viewport.current) return
-    suppressScroll.current = performance.now() + 180
-    viewport.current.scrollTop = (number - 1) * (height + 18)
+    viewport.current.scrollTop = (number - 1) * scrollStep
   }
   function jump(number: number) {
     const next = clampPage(number, total)
@@ -343,22 +363,28 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
         </div>}
       </aside>}
       <div className={`reader-viewport ${scrolling ? 'scroll-mode' : ''}`} ref={viewport} onScroll={event => {
-        if (scrolling && performance.now() >= suppressScroll.current) {
+        if (scrolling) {
           const position = event.currentTarget.scrollTop
-          const next = clampPage(Math.floor((position + Math.min(height, size.height) * .34) / (height + 18)) + 1, total)
+          const next = clampPage(Math.floor((position + Math.min(height, size.height) * .34) / scrollStep) + 1, total)
           if (next !== page) updatePage(next)
         }
       }}>
         {error ? <div className="reader-state"><BookOpen size={28} /><h2>Couldn’t open this PDF</h2><p>{error}</p><button className="secondary-button" onClick={close}>Back to library</button></div> :
           !pdf ? <div className="reader-state" role="status"><span className="spinner" /> Loading your book{loading > 0 ? ' · ' + loading + '%' : '…'}</div> :
-          scrolling ? <div className="scroll-pages" style={{ width }}>
-            {Array.from({ length: total }, (_, index) => <div className="scroll-leaf" style={{ height }} key={index}>{Math.abs(index + 1 - page) <= Math.max(3, Math.ceil(size.height / (height + 18)) + 1) && <PdfPage pdf={pdf} number={index + 1} width={width} height={height} theme={theme} query={query} annotations={book.annotations} />}</div>)}
+          scrolling ? <div className="scroll-pages" style={{ width, height: scrollHeight }}>
+            {Array.from({ length: lastVisible - firstVisible + 1 }, (_, index) => {
+              const number = firstVisible + index
+              return <div className="scroll-leaf" style={{ height, top: (number - 1) * scrollStep }} key={number}>
+                <PdfPage pdf={pdf} number={number} width={width} height={height} theme={theme} query={query} annotations={book.annotations} />
+              </div>
+            })}
           </div> : <div className={`book-centering ${compact ? 'compact' : ''}`}>
             <FlipBook pdf={pdf} page={page} change={updatePage} registerNavigation={handler => { navigation.current = handler }} width={width} height={height} spread={spread} motion={preferences.animation && !reduced} theme={theme} query={query} annotations={book.annotations} pinch={pinch} pinchScale={pinchScale} pan={needsPanning ? pan : undefined} />
           </div>}
       </div>
     </div>
-    {pdf && !focus && <footer className="reader-footer">
+    {!focus && <footer className="reader-footer">
+      {pdf && <>
       <div className="reader-progress"><span>{percent}% read</span><div role="progressbar" aria-label="Reading progress" aria-valuenow={percent}><i style={{ width: percent + '%' }} /></div></div>
       <div className="pagination">
         {readerButton('First page', ChevronsLeft, () => jump(1))}
@@ -370,6 +396,7 @@ export default function Reader({ book, close, password, toast }: { book: Book; c
       <div className="zoom-tools">{readerButton(marked ? 'Remove page bookmark' : 'Bookmark this page', Bookmark, toggleBookmark, !!marked)}
         {readerButton('Zoom out', Minus, () => changeZoom(zoom - 25))}<button className="zoom-value" title="Reset zoom" onClick={() => changeZoom(100)}>{zoom}%</button>{readerButton('Zoom in', Plus, () => changeZoom(zoom + 25))}
       </div>
+      </>}
     </footer>}
     {note && <Modal title={note.text ? 'Edit note' : 'Note on page ' + note.page} close={() => setNote(undefined)}><form onSubmit={saveNote}><label>Note<textarea autoFocus name="note" rows={5} defaultValue={note.text} required maxLength={6000} /></label><div className="dialog-actions"><button className="secondary-button" type="button" onClick={() => setNote(undefined)}>Cancel</button><button className="primary-button" type="submit">Save note</button></div></form></Modal>}
     {showExport && <Modal title="Export HTML flipbook" close={cancelExport}>

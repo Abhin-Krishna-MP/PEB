@@ -8,9 +8,9 @@ export function Logo() {
   return <div className="brand"><span className="brand-icon"><BookOpen size={22} strokeWidth={1.6} /></span><span>Folio<span className="brand-dot">.</span><small>PDF READER</small></span></div>
 }
 
-export function Cover({ book, className = '' }: { book: Book; className?: string }) {
+export function Cover({ book, className = '', lazy = false }: { book: Book; className?: string; lazy?: boolean }) {
   return <div className={`cover ${book.art === undefined ? 'imported' : initialStyles[book.art]} ${className}`}>
-    <img src={book.cover} alt={book.art === undefined ? `First page of ${book.title}` : ''} draggable={false} />
+    <img src={book.cover} alt={book.art === undefined ? `First page of ${book.title}` : ''} draggable={false} decoding="async" loading={lazy ? 'lazy' : undefined} />
     {book.art !== undefined && <div className="cover-print"><span>FOLIO EDITIONS</span><strong>{book.title}</strong><i /></div>}
   </div>
 }

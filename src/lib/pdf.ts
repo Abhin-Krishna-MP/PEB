@@ -12,8 +12,10 @@ export function loadPdf(data: ArrayBuffer, password?: PasswordRequest) {
     maxImageSize: 40_000_000, canvasMaxAreaInBytes: 48_000_000,
   })
   task.onPassword = (supply: (password: string | Error) => void, reason: number) => {
+    if (task.destroyed) return
     if (!password) return supply(new Error('This PDF requires a password.'))
     void password(reason === PasswordResponses.INCORRECT_PASSWORD).then(value => {
+      if (task.destroyed) return
       if (value === null) supply(new Error('Password entry was cancelled.'))
       else supply(value)
     })
@@ -43,7 +45,7 @@ export async function inspectPdf(file: File, password: PasswordRequest, update: 
     const book: Book = {
       id: crypto.randomUUID(),
       title: (typeof title === 'string' && cleanTitle(title)) || cleanTitle(file.name.replace(/\.pdf$/i, '')) || 'Untitled book',
-      category: 'PDF DOCUMENT', pages: pdf.numPages, cover: coverCanvas.toDataURL('image/webp', 0.86),
+      category: 'PDF DOCUMENT', pages: pdf.numPages, aspectRatio: base.width / base.height, cover: coverCanvas.toDataURL('image/webp', 0.86),
       favorite: false, size: file.size, page: 1, openedAt: 0, createdAt: Date.now(), annotations: [],
     }
     coverCanvas.width = coverCanvas.height = 0

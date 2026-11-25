@@ -156,6 +156,7 @@ h1 { font-size: clamp(39px, 4vw, 55px); line-height: .98; }
 .books.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 15px; }
 .book-card { min-width: 0; border: 1px solid var(--border-soft); background: var(--surface); border-radius: 11px; }
 .book-stage { height: 184px; position: relative; display: grid; place-items: center; isolation: isolate; border-radius: 10px 10px 0 0; border-bottom: 1px solid #ffffff11; background: #1b222f; }
+.books:not(.shelves) .book-stage { content-visibility: auto; }
 .stage-0 { background: radial-gradient(ellipse at 48% 43%, #2e3f55 0%, #1d2636 65%, #1a202d); }
 .stage-1 { background: radial-gradient(ellipse at 48% 43%, #58483b 0%, #332923 65%, #29221f); }
 .stage-2 { background: radial-gradient(ellipse at 48% 43%, #5a3d39 0%, #362a2d 65%, #2b2228); }
@@ -289,8 +290,9 @@ dialog::backdrop { background: #07090bd1; }
 .turn-layer { pointer-events: none; position: absolute; top: 0; left: 0; }
 .turn-layer[data-right=true] { left: var(--leaf-width); }
 .turn-underneath { z-index: 0; }
-.turn-leaf { z-index: 2; transform-origin: top left; filter: drop-shadow(2px 5px 8px #25150b65); }
-.turn-back { background: var(--paper-back); }
+.turn-stationary { clip-path: var(--stationary-clip); }
+.turn-leaf { transform: var(--fold-transform); z-index: 2; transform-origin: top left; filter: drop-shadow(2px 5px 8px #25150b65); }
+.turn-back { clip-path: var(--folded-clip); background: var(--paper-back); }
 .turn-back-print { transform: scaleX(-1); }
 .turn-back::after, .turn-underneath::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
 .turn-underneath::after {
@@ -311,8 +313,8 @@ dialog::backdrop { background: #07090bd1; }
 .blank-paper { width: 100%; height: 100%; background-color: var(--paper-back); }
 .render-error { display: none; position: absolute; inset: 0; font-size: 12px; color: #411f17; place-items: center; background: #f8ebe8; }
 [data-error=true] .render-error { display: grid; }
-.scroll-pages { margin: 15px auto; display: grid; gap: 18px; }
-.scroll-leaf { display: grid; place-items: center; }
+.scroll-pages { position: relative; margin: 15px auto; }
+.scroll-leaf { position: absolute; inset-inline: 0; display: grid; place-items: center; }
 .scroll-leaf .pdf-paper { box-shadow: 0 5px 25px #0007; }
 
 @media (max-width: 1050px) {

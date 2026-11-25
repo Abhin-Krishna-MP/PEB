@@ -1,7 +1,38 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { memo, useEffect, useRef, type CSSProperties } from 'react'
 import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist'
-import 'pdfjs-dist/web/pdf_viewer.css'
+import './pdf-text.css'
 import type { Annotation, Theme } from '../lib/model'
+
+const noAnnotations: Annotation[] = []
+const maxRasterPixels = 8_000_000
+const pageRasters = new WeakMap<PDFDocumentProxy, Map<string, ImageBitmap>>()
+
+export function clearPageRasters(pdf: PDFDocumentProxy) {
+  const rasters = pageRasters.get(pdf)
+  rasters?.forEach(bitmap => bitmap.close())
+  rasters?.clear()
+  pageRasters.delete(pdf)
+}
+
+function cachePageRaster(pdf: PDFDocumentProxy, key: string, canvas: HTMLCanvasElement, isCurrent: () => boolean) {
+  if (!globalThis.createImageBitmap) return
+  if (!pageRasters.has(pdf)) pageRasters.set(pdf, new Map())
+  const rasters = pageRasters.get(pdf)!
+  void createImageBitmap(canvas).then(bitmap => {
+    if (!isCurrent() || pageRasters.get(pdf) !== rasters) { bitmap.close(); return }
+    rasters.get(key)?.close()
+    rasters.delete(key)
+    rasters.set(key, bitmap)
+    let pixels = 0
+    for (const raster of rasters.values()) pixels += raster.width * raster.height
+    for (const [oldest, raster] of rasters) {
+      if (pixels <= maxRasterPixels) break
+      pixels -= raster.width * raster.height
+      raster.close()
+      rasters.delete(oldest)
+    }
+  }).catch(() => undefined)
+}
 
 const thumbnailCache = new WeakMap<PDFDocumentProxy, Map<number, string>>()
 
@@ -15,6 +46,7 @@ interface Props {
   query?: string
   annotations?: Annotation[]
   thumbnail?: boolean
+  cacheRaster?: boolean
 }
 function markSearch(layer: HTMLDivElement, query: string) {
   const phrase = query.toLocaleLowerCase().trim().replace(/\s+/g, ' ')
@@ -28,16 +60,13 @@ function markSearch(layer: HTMLDivElement, query: string) {
     return { span, start, end: joined.length }
   })
   let match = joined.indexOf(phrase)
-  while (match !== -1) {
-    for (const { span, start, end } of ranges) {
-      if (start >= match + phrase.length) break
-      if (end > match) span.classList.add('search-match')
-    }
-    match = joined.indexOf(phrase, match + phrase.length)
+  for (const { span, start, end } of ranges) {
+    while (match !== -1 && match + phrase.length <= start) match = joined.indexOf(phrase, match + phrase.length)
+    if (match !== -1 && match < end) span.classList.add('search-match')
   }
 }
 
-export default function PdfPage({ pdf, number, width, height, theme = 'Original', text = true, query = '', annotations = [], thumbnail = false }: Props) {
+export default memo(function PdfPage({ pdf, number, width, height, theme = 'Original', text = true, query = '', annotations = noAnnotations, thumbnail = false, cacheRaster = false }: Props) {
   const paper = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const layer = useRef<HTMLDivElement>(null)
@@ -84,10 +113,22 @@ export default function PdfPage({ pdf, number, width, height, theme = 'Original'
       holder.style.setProperty('--total-scale-factor', String(scale * page.userUnit))
       target.width = Math.max(1, Math.floor(viewport.width * dpr))
       target.height = Math.max(1, Math.floor(viewport.height * dpr))
-      const task = page.render({ canvas: target, viewport, transform: [dpr, 0, 0, dpr, 0, 0] })
-      render = task
-      await task.promise
-      if (disposed) return
+      const rasterKey = `${number}:${target.width}:${target.height}`
+      const rasters = !thumbnail ? pageRasters.get(pdf) : undefined
+      const raster = rasters?.get(rasterKey)
+      if (raster) {
+        target.getContext('2d')?.drawImage(raster, 0, 0)
+        if (!cacheRaster) {
+          rasters!.delete(rasterKey)
+          raster.close()
+        }
+      } else {
+        const task = page.render({ canvas: target, viewport, transform: [dpr, 0, 0, dpr, 0, 0] })
+        render = task
+        await task.promise
+        if (disposed) return
+        if (cacheRaster) cachePageRaster(pdf, rasterKey, target, () => !disposed)
+      }
       holder.dataset.rendered = 'true'
       if (cached) {
         if (cached.size >= 96) {
@@ -98,8 +139,12 @@ export default function PdfPage({ pdf, number, width, height, theme = 'Original'
       }
       if (textElement) {
         textLayer = new TextLayer({ textContentSource: page.streamTextContent(), viewport, container: textElement })
-        await textLayer.render()
-        if (!disposed) markSearch(textElement, latestQuery.current)
+        try {
+          await textLayer.render()
+          if (!disposed) markSearch(textElement, latestQuery.current)
+        } catch {
+          if (!disposed) textElement.replaceChildren()
+        }
       }
       release()
     }
@@ -113,7 +158,7 @@ export default function PdfPage({ pdf, number, width, height, theme = 'Original'
       release()
       target.width = target.height = 0
     }
-  }, [pdf, number, width, height, text, thumbnail])
+  }, [pdf, number, width, height, text, thumbnail, cacheRaster])
   useEffect(() => {
     const element = layer.current
     if (!element) return
@@ -127,4 +172,4 @@ export default function PdfPage({ pdf, number, width, height, theme = 'Original'
       <i className="text-highlight" key={item.id + index} style={{ left: box.x * 100 + '%', top: box.y * 100 + '%', width: box.width * 100 + '%', height: box.height * 100 + '%' } as CSSProperties} />))}
     <span className="render-error">This page could not be rendered.</span>
   </div>
-}
+})

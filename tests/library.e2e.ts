@@ -51,6 +51,56 @@ test('provides desktop category shortcuts and theme-specific bookshelf decor', a
   await expect(page.getByRole('button', { name: 'Resume reading' })).toBeVisible()
 })
 
+test('returns to the same library scroll position with the app and browser back buttons', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 560 })
+  await page.goto('/')
+  const book = page.getByRole('button', { name: 'Open Compiler Design', exact: true })
+  await book.scrollIntoViewIfNeeded()
+  const scroll = await page.evaluate(() => window.scrollY)
+  const historyLength = await page.evaluate(() => history.length)
+  expect(scroll).toBeGreaterThan(200)
+
+  await book.click()
+  await expect(paper(page, 1)).toBeVisible()
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await expect(book).toBeInViewport()
+  await expect(book).toBeFocused()
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scroll)
+  await page.goForward()
+  await expect(paper(page, 1)).toBeVisible()
+  await page.goBack()
+  await expect(book).toBeInViewport()
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scroll)
+
+  await book.click()
+  await expect(paper(page, 1)).toBeVisible()
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await expect(book).toBeInViewport()
+  expect(await page.evaluate(() => history.length)).toBe(historyLength + 1)
+})
+
+test.describe('interrupting a slow open', () => {
+  test.use({ serviceWorkers: 'block' })
+
+  test('can go back before the PDF finishes loading', async ({ page }) => {
+    const release = Promise.withResolvers<void>()
+    await page.route('**/samples/algorithms.pdf', async route => {
+      await release.promise
+      await route.continue().catch(() => undefined)
+    })
+    try {
+      await page.goto('/')
+      await sampleOpen(page).click()
+      await expect(page.getByText(/Loading your book|Opening your book/)).toBeVisible()
+      await page.getByRole('button', { name: /^(Library|Back to library)$/ }).click()
+      await expect(sampleOpen(page)).toBeVisible()
+    } finally {
+      release.resolve()
+    }
+    await expect(page.locator('.reader')).toHaveCount(0)
+  })
+})
+
 async function createPdf(count: number) {
   const pdf = await PDFDocument.create()
   const font = await pdf.embedFont(StandardFonts.Helvetica)
@@ -110,6 +160,13 @@ test('renders and resumes a 205-page mixed-orientation PDF after an offline rest
   await expect(paper(reopened, 205)).toBeVisible()
   await expect(pageControl(reopened)).toHaveValue('205')
   await expect(reopened.getByRole('button', { name: 'Remove page bookmark' })).toBeVisible()
+  await reopened.getByRole('button', { name: 'Reader options' }).click()
+  await reopened.getByLabel('Reading mode').selectOption('Scroll')
+  await expect(reopened.locator('.scroll-pages')).toBeVisible()
+  expect(await reopened.locator('.scroll-leaf').count()).toBeLessThan(15)
+  await expect(paper(reopened, 205)).toBeInViewport()
+  await expect(pageControl(reopened)).toHaveValue('205')
+  await reopened.keyboard.press('Escape')
   await reopened.getByRole('button', { name: 'Library', exact: true }).click()
   await expect(reopened.getByText('Offline', { exact: true })).toBeVisible()
   await expect(reopened.getByRole('button', { name: 'Open Research notebook' })).toBeVisible()
@@ -153,6 +210,10 @@ test('rejects a corrupt file, prompts for passwords, and identifies an image-onl
   await page.getByRole('button', { name: 'Unlock' }).click()
   await expect(paper(page, 1)).toBeVisible()
   await page.reload()
+  await expect(page.getByRole('dialog', { name: 'Unlock PDF' })).toBeVisible()
+  await page.goBack()
+  await expect(page.getByRole('dialog', { name: 'Unlock PDF' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Open Protected notes', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Unlock PDF' })).toBeVisible()
   await page.getByLabel('Password', { exact: true }).fill('folio-test')
   await page.getByRole('button', { name: 'Unlock' }).click()

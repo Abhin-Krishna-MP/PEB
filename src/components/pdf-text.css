@@ -1,0 +1,44 @@
+/* Layout contract for PDF.js TextLayer's positioned spans and its page rotation. */
+.pdf-paper .textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: start;
+  letter-spacing: normal;
+  word-spacing: normal;
+  transform-origin: 0 0;
+  text-size-adjust: none;
+  -webkit-text-size-adjust: none;
+  color-scheme: only light;
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  --min-font-size: 1;
+}
+
+.pdf-paper .textLayer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+  user-select: text;
+}
+
+.pdf-paper .textLayer > :not(.markedContent),
+.pdf-paper .textLayer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  z-index: 1;
+  font-size: calc(var(--total-scale-factor) * var(--min-font-size) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(calc(1 / var(--min-font-size)));
+}
+
+.pdf-paper .textLayer .markedContent { display: contents; }
+.pdf-paper .textLayer span[role="img"] { cursor: default; user-select: none; }
+.pdf-paper .textLayer ::selection { color: transparent; background: #645bd05a; }
+.pdf-paper .textLayer br::selection { background: transparent; }
+.pdf-paper .textLayer[data-main-rotation="90"] { transform: rotate(90deg) translateY(-100%); }
+.pdf-paper .textLayer[data-main-rotation="180"] { transform: rotate(180deg) translate(-100%, -100%); }
+.pdf-paper .textLayer[data-main-rotation="270"] { transform: rotate(270deg) translateX(-100%); }

@@ -54,9 +54,9 @@ export async function updateBook(id: string, patch: Partial<Book>) {
   await tx.done
   return book ? { ...book, ...patch } : undefined
 }
-export async function readFile(book: Book) {
+export async function readFile(book: Book, signal?: AbortSignal) {
   if (book.sample) {
-    const response = await fetch(book.sample)
+    const response = await fetch(book.sample, { signal })
     if (!response.ok) throw new Error('This sample could not be loaded.')
     return response.blob()
   }
