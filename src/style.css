@@ -811,6 +811,8 @@ dialog::backdrop { background: #07090bd1; }
 .companion-still .companion-sprite { animation: none; }
 .companion-voice:empty { position: absolute; }
 .companion-bubble {
+  pointer-events: auto;
+  text-align: left;
   position: relative;
   width: max-content;
   max-width: min(215px, calc(100vw - 24px));

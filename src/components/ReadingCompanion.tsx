@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { reactionForPage, type Reaction, type BeatKind, type KittenMood } from '../lib/companion'
+import { quietTapLine, reactionForPage, type Reaction, type BeatKind, type KittenMood } from '../lib/companion'
 import type { CompanionMode } from '../lib/model'
 
 type Moment = { page: number; mood: KittenMood; kind?: BeatKind; line?: string }
@@ -24,6 +24,7 @@ export default function ReadingCompanion({ page, mode, available, reducedMotion,
   const recentLines = useRef<string[]>([])
   const previousBeat = useRef<{ page: number; kind: BeatKind } | null>(null)
   const lastSpeech = useRef(-Infinity)
+  const spokenTurns = useRef({ automatic: 0, tap: 0 })
   const [tabVisible, setTabVisible] = useState(() => !document.hidden)
   const [moment, setMoment] = useState<Moment>()
   const visible = available && mode !== 'Off' && tabVisible
@@ -51,44 +52,44 @@ export default function ReadingCompanion({ page, mode, available, reducedMotion,
     const interrupted = () => document.hidden || !!document.querySelector('dialog[open]') || (automatic && window.getSelection()?.type === 'Range')
     if (!visible || interrupted() || (automatic && reactedPages.current.has(page))) return
     cancel()
-    setMoment(undefined)
+    setMoment(automatic ? undefined : { page, mood: 'curious' })
     const token = attempt.current
     const previous = previousBeat.current
     const recent = previous && previous.page <= page && page - previous.page <= 2 ? previous.kind : undefined
-    let reaction: Reaction | undefined
+    const turn = automatic ? 'automatic' : 'tap'
+    const preferQuestion = spokenTurns.current[turn] % 2 === (automatic ? 1 : 0)
+    let text = ''
     try {
-      reaction = reactionForPage(await readPage(page), { words, seen: seenBeats.current, recent: recentLines.current, previous: recent })
+      text = await readPage(page)
     } catch {
-      // A missing text layer leaves the companion reading quietly.
+      // Image-only pages still allow a tap response.
     }
     if (token !== attempt.current || interrupted()) return
-    if (!reaction) {
-      if (!automatic) {
-        setMoment({ page, mood: 'curious' })
-        animationTimers.current.push(window.setTimeout(() => setMoment(undefined), 2000))
-      }
-      return
-    }
+    const reaction: Reaction | undefined = reactionForPage(text, { words, seen: seenBeats.current, recent: recentLines.current, previous: recent, preferQuestion })
+    if (automatic && !reaction) return
 
-    reactedPages.current.add(page)
-    seenBeats.current.add(reaction.stamp)
-    previousBeat.current = { page, kind: reaction.kind }
-    const expression = { page, mood: reaction.mood, kind: reaction.kind }
+    const expression: Moment = { page, mood: reaction?.mood ?? 'curious', kind: reaction?.kind }
+    if (reaction) previousBeat.current = { page, kind: reaction.kind }
     setMoment(expression)
     if (automatic && Date.now() - lastSpeech.current < speechCooldown) {
       animationTimers.current.push(window.setTimeout(() => setMoment(undefined), 3600))
       return
     }
 
-    const { kind, line } = reaction
+    const line = reaction?.line ?? quietTapLine(text, recentLines.current)
     const showLine = () => {
       if (interrupted()) { setMoment(undefined); return }
+      reactedPages.current.add(page)
+      if (reaction) seenBeats.current.add(reaction.stamp)
+      spokenTurns.current[turn]++
       recentLines.current = [line, ...recentLines.current].slice(0, 6)
       lastSpeech.current = Date.now()
       setMoment({ ...expression, line })
       animationTimers.current.push(window.setTimeout(() => setMoment(undefined), Math.max(5400, line.length * 91)))
     }
-    animationTimers.current.push(window.setTimeout(showLine, noticeTime[kind] + (reaction.strength < 6 ? 180 : 0)))
+    if (automatic && reaction) {
+      animationTimers.current.push(window.setTimeout(showLine, noticeTime[reaction.kind] + (reaction.strength < 6 ? 180 : 0)))
+    } else showLine()
   }, [visible, page, readPage, cancel])
 
   useEffect(() => {
@@ -109,12 +110,12 @@ export default function ReadingCompanion({ page, mode, available, reducedMotion,
       if (event.key === 'Escape' && current) { event.stopPropagation(); dismiss() }
     }}>
     <div id={bubbleId} className="companion-voice" role="status" aria-atomic="true">
-      {current?.line && <p className="companion-bubble">{current.line}</p>}
+      {current?.line && <button className="companion-bubble" title="Dismiss reaction" onClick={dismiss}>{current.line}</button>}
     </div>
-    <button className="companion-pet" aria-label={current?.line ? 'Dismiss kitten reaction' : 'See kitten reaction'}
+    <button className="companion-pet" aria-label="See kitten reaction"
       aria-expanded={!!current?.line} aria-controls={bubbleId}
-      title={current?.line ? 'Dismiss reaction' : 'See the kitten’s reaction'}
-      onClick={() => { if (current?.line) dismiss(); else void perform() }}>
+      title="See the kitten’s reaction"
+      onClick={() => void perform()}>
       <span className="companion-sprite" data-mood={current?.mood ?? 'reading'} data-beat={current?.kind} aria-hidden="true" />
     </button>
   </aside>

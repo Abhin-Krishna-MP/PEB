@@ -17,6 +17,7 @@ type ReactionContext = {
   seen?: ReadonlySet<string>
   recent?: readonly string[]
   previous?: BeatKind
+  preferQuestion?: boolean
 }
 
 const sentences = new Intl.Segmenter('en', { granularity: 'sentence' })
@@ -71,7 +72,7 @@ const signals: { kind: BeatKind; mood: KittenMood; strong: RegExp; supporting: R
 
 const person = /\b(\p{Lu}[\p{L}’'-]+)\s+(?:(?:suddenly|finally|quietly)\s+)?(?:hesitated|paused|hid|concealed|slipped|laughed|giggled|screamed|froze|wept|gasped|wondered|refused|noticed|found|stared|whispered|answered|trembled|pulled|sighed)\b/u
 const ordinarySubjects = /^(?:He|She|They|Them|There|Then|Someone|Everyone|Nobody|Something|Nothing|It|That|This|Suddenly)$/u
-const object = /\b(?:the|a|an|his|her|their)\s+((?:[\p{L}’'-]+\s+){0,2}(?:door|key|letter|note|map|lantern|footsteps|shadow|window|box|portrait|knife|package))\b/iu
+const object = /\b(?:the|a|an|his|her|their)\s+((?:[\p{L}’'-]+\s+){0,2}(?:door|key|letter|note|map|lantern|footsteps|shadow|window|box|portrait|knife|package|room|garden|hallway|gate|river|train|photograph))\b/iu
 
 function substantive(text: string, pattern: RegExp) {
   const match = pattern.exec(text)
@@ -154,14 +155,47 @@ function linesFor(beat: Beat, previous?: BeatKind): string[] {
   }
 }
 
+function questionFor(beat: Beat) {
+  const { name, object: detail } = beat
+  switch (beat.kind) {
+    case 'doubt': return name && beat.hesitation ? `What do you think made ${name} hesitate?` : detail ? `Why do you think the ${detail} turned up here?` : 'I wonder what they’ll do next. Any guesses?'
+    case 'deception': return name && detail && beat.concealed ? `Who might ${name} be hiding the ${detail} from?` : name ? `Would you trust ${name} after that?` : 'Do you think they’re telling the whole story?'
+    case 'surprise': return 'Wait, did you spot a clue before that happened?'
+    case 'danger': return detail ? `The ${detail} ${detail.endsWith('footsteps') ? 'are' : 'is'} making me nervous… would you go look?` : 'Would you stay put or go see what’s happening?'
+    case 'unease': return detail ? `Would you get any closer to the ${detail}?` : 'Would you wait a little longer or get out of there?'
+    case 'humor': return name ? `Did you think ${name} would keep a straight face?` : 'Be honest. Would you have managed to keep a straight face?'
+    case 'grief': return name ? `If you could sit beside ${name} for a moment, what would you say?` : 'What do you think they wish they had said?'
+    case 'relief': return 'Phew. When did you first think they might be safe?'
+    case 'warmth': return name ? `Do you think this changes how ${name} sees them?` : 'What do you think made that small gesture mean so much?'
+  }
+}
+
 export function reactionForPage(text: string, context: ReactionContext = {}): Reaction | undefined {
   const limit = context.words
   const automatic = limit !== undefined
   const beats = findBeats(text, limit)
     .filter(beat => beat.score >= (automatic ? 5 : 2) && (!automatic || !context.seen?.has(beat.stamp)))
   for (const beat of beats) {
-    const line = linesFor(beat, context.previous).find(candidate => !context.recent?.includes(candidate))
+    const comments = linesFor(beat, context.previous)
+    const question = questionFor(beat)
+    const choices = context.preferQuestion ? [question, ...comments] : [...comments, question]
+    const line = choices.find(candidate => !context.recent?.includes(candidate))
     if (!line) continue
     return { kind: beat.kind, mood: beat.mood, strength: beat.score, stamp: beat.stamp, line }
   }
+}
+
+export function quietTapLine(text: string, recent: readonly string[]) {
+  const detail = object.exec(text.slice(0, 12_000))?.[1]?.toLowerCase()
+  const lines = detail ? [
+    `I wonder what we’ll learn about the ${detail}.`,
+    `Do you think we’ll see the ${detail} again?`,
+  ] : text.trim() ? [
+    'I’m here. Let’s see where this takes us.',
+    'Shall we read a little more?',
+  ] : [
+    'The words are a blur from here. I’ll keep you company.',
+    'I can still sit here with you.',
+  ]
+  return lines.find(line => !recent.includes(line)) ?? lines[0]
 }

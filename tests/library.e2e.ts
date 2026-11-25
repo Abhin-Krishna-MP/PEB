@@ -454,6 +454,7 @@ test('the kitten expresses scene emotions offline and remembers when turned off'
     'Mara burst out laughing when Eli put the saucepan on his head.',
     'Mara heard footsteps behind her in the dark and her heart pounded.',
     'Mara sighed with relief when she saw the garden gate.',
+    'The blue room was warm.',
   ]
   for (const passage of passages) story.addPage([455, 550]).drawText(passage, { x: 25, y: 500, size: 11, font })
   await filePicker(page).setInputFiles({ name: 'story.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await story.save()) })
@@ -480,8 +481,10 @@ test('the kitten expresses scene emotions offline and remembers when turned off'
   await page.clock.fastForward(35_000)
   await expect(sprite).toHaveAttribute('data-mood', 'afraid')
   await expect(bubble).toHaveCount(0)
+  await page.clock.fastForward(40_000)
+  await expect(bubble).toHaveText('The footsteps are making me nervous… would you go look?')
   await react.click()
-  await expect(bubble).toContainText('making me nervous')
+  await expect(bubble).toHaveText('The footsteps are making me nervous…')
 
   await pageControl(page).fill('3')
   await pageControl(page).press('Enter')
@@ -492,11 +495,21 @@ test('the kitten expresses scene emotions offline and remembers when turned off'
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect(sprite).toHaveCSS('animation-name', 'none')
 
+  await pageControl(page).fill('4')
+  await pageControl(page).press('Enter')
+  await expect(paper(page, 4)).toBeVisible()
+  await react.click()
+  await expect(bubble).toHaveText('I wonder what we’ll learn about the blue room.')
+  await react.click()
+  await expect(bubble).toHaveText('Do you think we’ll see the blue room again?')
+  await bubble.click()
+  await expect(bubble).toHaveCount(0)
+
   await page.getByRole('button', { name: 'Reader options' }).click()
   await page.getByLabel('Reading companion').selectOption('Off')
   await expect(companion).toHaveCount(0)
   await page.reload()
-  await expect(paper(page, 3)).toBeVisible()
+  await expect(paper(page, 4)).toBeVisible()
   await expect(companion).toHaveCount(0)
   await page.getByRole('button', { name: 'Reader options' }).click()
   await expect(page.getByLabel('Reading companion')).toHaveValue('Off')
