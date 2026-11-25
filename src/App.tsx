@@ -1,14 +1,14 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
-  ArrowDownUp, ArrowRight, BookOpen, Bookmark, Check, ChevronDown, Clock3, Database, Download, Ellipsis,
-  FileUp, Folder, Heart, LayoutGrid, LibraryBig, List, Menu, Moon, Pencil, Plus, Search, Settings as SettingsIcon,
-  ShieldCheck, Sun, Trash2, WifiOff, X,
+  ArrowDownUp, ArrowRight, BookOpen, Bookmark, Check, ChevronDown, Clock3, Code2, Crown, Database, Download, Ellipsis,
+  FileText, FileUp, Folder, Heart, House, LayoutGrid, LibraryBig, List, Menu, Monitor, Moon, Pencil, Plus, Search, Settings as SettingsIcon,
+  ShieldCheck, Sigma, SlidersHorizontal, Sun, Trash2, UserRound, Wifi, WifiOff, X,
 } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Cover, Logo, Modal } from './components/Common'
 import Settings from './components/Settings'
 import BookSpine from './components/BookSpine'
-import { fileSize, progress, type Book } from './lib/model'
+import { fileSize, progress, type Book, type LibraryLayout } from './lib/model'
 import { useLibrary } from './lib/store'
 import type { PasswordRequest } from './lib/pdf'
 
@@ -19,10 +19,20 @@ const navigation = [
   { key: 'favorites', label: 'Favorites', icon: Heart },
   { key: 'recent', label: 'Recently opened', icon: Clock3 },
 ]
-const heading: Record<string, string> = {
-  library: 'My Library', collections: 'Collections', favorites: 'Favorites', recent: 'Recently opened', settings: 'Settings',
+const subjectIcons: Record<string, typeof FileText> = {
+  'COMPUTER SCIENCE': Monitor, DATABASES: Database, MATHEMATICS: Sigma, NETWORKING: Wifi, PROGRAMMING: Code2,
 }
-type Dialog = { kind: 'upload' | 'install' | 'clear' | 'collection' } | { kind: 'delete' | 'rename' | 'move'; book: Book } | { kind: 'deleteCollection'; id: string }
+const shelfNavigation = [{ key: 'home', label: 'Home', icon: House }, ...navigation]
+const shelfTabs = [
+  { key: 'library', label: 'All', icon: LibraryBig },
+  { key: 'recent', label: 'Recent', icon: Clock3 },
+  { key: 'favorites', label: 'Favorites', icon: Heart },
+  { key: 'collections', label: 'Collections', icon: Folder },
+]
+const heading: Record<string, string> = {
+  home: 'Home', library: 'My Library', collections: 'Collections', favorites: 'Favorites', recent: 'Recently opened', settings: 'Settings',
+}
+type Dialog = { kind: 'upload' | 'install' | 'clear' | 'collection' | 'filter' } | { kind: 'delete' | 'rename' | 'move'; book: Book } | { kind: 'deleteCollection'; id: string }
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
 const currentBook = () => window.location.hash.slice(1) || null
 
@@ -40,6 +50,7 @@ export default function App() {
   const [active, setActive] = useState(currentBook)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('added')
+  const [category, setCategory] = useState('')
   const layout = preferences.libraryLayout
   const onShelves = layout === 'shelves'
   const [menu, setMenu] = useState<string>()
@@ -130,8 +141,13 @@ export default function App() {
   function navigate(key: string) {
     setView(key)
     setQuery('')
+    setCategory('')
     setMenu(undefined)
     setMobile(false)
+  }
+  function changeLayout(value: LibraryLayout) {
+    if (view === 'home' && value !== 'shelves') navigate('library')
+    persist(configure({ libraryLayout: value }))
   }
   function persist(task: Promise<void>, success?: string) {
     void task.then(() => { if (success) toast(success) }).catch(() => toast('Could not save the change to this device.'))
@@ -186,10 +202,22 @@ export default function App() {
     setInstallPrompt(undefined)
   }
 
+  function pickCategory(value: string) {
+    setCategory(value)
+    setView('library')
+    setMenu(undefined)
+    setMobile(false)
+  }
+
+  const categories = [...books.reduce((counts, book) => counts.set(book.category, (counts.get(book.category) ?? 0) + 1), new Map<string, number>())]
+    .sort(([a], [b]) => a.localeCompare(b))
+  const categoryOptions: [string, number][] = [['', books.length], ...categories]
+  const categoryLabel = (value: string) => value ? value.toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase()).replace(/^Pdf /, 'PDF ') : 'All books'
   const collection = collections.find(item => item.id === view)
   const recent = books.filter(book => book.openedAt).sort((a, b) => b.openedAt - a.openedAt)
   const feature = recent[0]
   const rows = books.filter(book => {
+    if (onShelves && category && book.category !== category) return false
     if (query.trim()) return `${book.title} ${book.category}`.toLowerCase().includes(query.trim().toLowerCase())
     if (view === 'favorites') return book.favorite
     if (view === 'recent') return book.openedAt
@@ -201,7 +229,7 @@ export default function App() {
     if (sort === 'recent' || view === 'recent') return b.openedAt - a.openedAt
     return b.createdAt - a.createdAt
   })
-  const showFeature = view === 'library' && !query.trim() && feature
+  const showFeature = (view === 'home' || (view === 'library' && !onShelves)) && !query.trim() && feature
   const showCollections = view === 'collections' && !query.trim()
 
   function handleDialog(event: FormEvent<HTMLFormElement>) {
@@ -225,17 +253,38 @@ export default function App() {
   }}>
     <input type="file" accept="application/pdf,.pdf" multiple hidden ref={files} onChange={event => { if (event.target.files) void importFiles(event.target.files) }} />
     {activeBook ? <Suspense fallback={<div className="center-screen">Opening your book…</div>}><Reader key={activeBook.id} book={activeBook} close={exitReader} password={unlockBook} toast={toast} /></Suspense> :
-      <div className="shell">
+      <div className={`shell ${onShelves ? 'bookshelf-shell' : ''}`}>
+        {onShelves && <header className="shelf-masthead">
+          <button className="masthead-brand" onClick={() => navigate('home')} aria-label="Folio home"><Logo /></button>
+          <nav className="masthead-nav" aria-label="Bookshelf navigation">{shelfNavigation.map(({ key, label, icon: Icon }) =>
+            <button key={key} className={view === key ? 'selected' : ''} aria-current={view === key ? 'page' : undefined} onClick={() => navigate(key)}><Icon size={15} />{key === 'recent' ? 'Recent' : label}</button>
+          )}</nav>
+          <div className="masthead-actions">
+            <button className="shelf-install" aria-label="Install Folio" onClick={() => void install()}><Crown size={16} /><span>Install Folio</span></button>
+            <button className="icon-button masthead-profile" aria-label="App settings" title="Settings" onClick={() => navigate('settings')}><UserRound size={17} /></button>
+          </div>
+        </header>}
         {mobile && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setMobile(false)} />}
         <aside className={`sidebar ${mobile ? 'sidebar-open' : ''}`}>
           <button className="brand-button" onClick={() => navigate('library')} aria-label="Folio library"><Logo /></button>
           <div className="side-content">
+            {onShelves ? <>
+              <div className="shelf-sidebar-title"><LibraryBig size={17} /> Library</div>
+              <nav aria-label="Library categories">{categoryOptions.map(([value, count]) => {
+                const Icon = value ? subjectIcons[value] ?? FileText : BookOpen
+                const selected = view === 'library' && category === value
+                return <button key={value} className={`nav-item ${selected ? 'selected' : ''}`} aria-pressed={selected} onClick={() => pickCategory(value)}>
+                  <Icon size={16} /><span>{categoryLabel(value)}</span><small>{count}</small>
+                </button>
+              })}</nav>
+            </> : <>
             <div className="nav-label">WORKSPACE</div>
             <nav aria-label="Main navigation">
               {navigation.map(({ key, label, icon: Icon }) => <button key={key} className={`nav-item ${view === key ? 'selected' : ''}`} aria-current={view === key ? 'page' : undefined} onClick={() => navigate(key)}>
                 <Icon size={18} strokeWidth={1.7} /><span>{label}</span>{key === 'library' && <small>{books.length}</small>}
               </button>)}
             </nav>
+            </>}
             <div className="sidebar-collections">
               <div className="nav-label collection-label">COLLECTIONS
                 {collections.length > 0 && <button className="icon-button" aria-label="New collection" title="New collection" onClick={() => setDialog({ kind: 'collection' })}><Plus size={16} /></button>}
@@ -245,6 +294,11 @@ export default function App() {
             </div>
           </div>
           <div className="sidebar-foot">
+            {onShelves && <div className="shelf-install-card">
+              <strong><Crown size={15} /> Folio on your device</strong>
+              <p>Open your library from your home screen and read offline.</p>
+              <button className="primary-button" onClick={() => void install()}><Download size={15} /> Install app</button>
+            </div>}
             <button className={`nav-item ${view === 'settings' ? 'selected' : ''}`} aria-current={view === 'settings' ? 'page' : undefined} onClick={() => navigate('settings')}><SettingsIcon size={18} strokeWidth={1.7} /><span>Settings</span></button>
             <div className="storage-card">
               <div className="storage-title"><Database size={15} /><strong>Local storage</strong><small>{fileSize(usage)} used</small></div>
@@ -267,10 +321,13 @@ export default function App() {
           <main className="main-content">
             {view === 'settings' ? <Settings install={() => void install()} clear={() => setDialog({ kind: 'clear' })} usage={usage} quota={quota} toast={toast} /> :
               <>
-                <div className="page-heading"><div><h1>{query.trim() ? 'Search results' : collection?.name ?? heading[view]}</h1><p className="intro">{query.trim() ? `Books matching “${query.trim()}”` : view === 'library' ? 'A quiet place for everything you read.' : view === 'recent' ? 'Pick up a book you’ve opened before.' : view === 'favorites' ? 'Keep the books you love close at hand.' : 'Organize your books into reading collections.'}</p></div>
-                  {view === 'library' && !query && <span className="private-pill">{online ? <ShieldCheck size={15} /> : <WifiOff size={15} />}{online ? 'Private & local' : 'Offline'}</span>}
+                <div className="page-heading"><div><h1>{query.trim() ? 'Search results' : collection?.name ?? heading[view]}</h1><p className="intro">{query.trim() ? `Books matching “${query.trim()}”` : view === 'library' ? onShelves ? `${books.length} ${books.length === 1 ? 'book' : 'books'} · Your personal PDF library` : 'A quiet place for everything you read.' : view === 'home' ? 'Continue reading or open a book from your library.' : view === 'recent' ? 'Pick up a book you’ve opened before.' : view === 'favorites' ? 'Keep the books you love close at hand.' : 'Organize your books into reading collections.'}</p></div>
+                  {view === 'library' && !query && (!onShelves || !online) && <span className="private-pill">{online ? <ShieldCheck size={15} /> : <WifiOff size={15} />}{online ? 'Private & local' : 'Offline'}</span>}
                   {collection && <button className="icon-button danger" aria-label="Delete collection" onClick={() => setDialog({ kind: 'deleteCollection', id: collection.id })}><Trash2 size={18} /></button>}
                 </div>
+                {onShelves && view !== 'home' && !collection && <nav className="shelf-tabs" aria-label="Browse books">
+                  {shelfTabs.map(({ key, label, icon: Icon }) => <button key={key} className={view === key ? 'selected' : ''} aria-current={view === key ? 'page' : undefined} onClick={() => navigate(key)}><Icon size={15} />{label}</button>)}
+                </nav>}
                 {showFeature && <section className="feature" aria-label="Continue reading" style={{ '--feature-art': `url("${feature.cover}")` } as React.CSSProperties}>
                   <div className="feature-content">
                     <div className="eyebrow"><BookOpen size={16} /> CONTINUE READING</div>
@@ -286,18 +343,22 @@ export default function App() {
                   <button className="collection-card new" onClick={() => setDialog({ kind: 'collection' })}><Plus size={25} /><strong>New collection</strong></button>
                 </section> : <section className="shelf" aria-label="Bookshelf">
                   <div className="shelf-header">
-                    <div className="shelf-title"><h2>{view === 'library' && !query ? 'Bookshelf' : 'Books'}</h2><span>{rows.length} {rows.length === 1 ? 'book' : 'books'}</span></div>
+                    <div className={onShelves ? 'sr-only' : 'shelf-title'}><h2>{view === 'library' && !query ? 'Bookshelf' : 'Books'}</h2><span>{rows.length} {rows.length === 1 ? 'book' : 'books'}</span></div>
                     <div className="shelf-controls">
                       <label className="sort"><ArrowDownUp size={15} /><select aria-label="Sort books" value={sort} onChange={event => setSort(event.target.value)}><option value="added">Recently added</option><option value="recent">Last opened</option><option value="title">Title A–Z</option><option value="pages">Page count</option></select><ChevronDown size={14}/></label>
+                      {onShelves && <button className="shelf-filter" aria-label="Filter books" onClick={() => setDialog({ kind: 'filter' })}><SlidersHorizontal size={15} /><span>Filter</span></button>}
                       <div className="view-toggle" role="group" aria-label="Library layout">
-                        <button className={layout === 'grid' ? 'on' : ''} aria-label="Grid view" title="Grid view" aria-pressed={layout === 'grid'} onClick={() => persist(configure({ libraryLayout: 'grid' }))}><LayoutGrid size={16} /></button>
-                        <button className={layout === 'list' ? 'on' : ''} aria-label="List view" title="List view" aria-pressed={layout === 'list'} onClick={() => persist(configure({ libraryLayout: 'list' }))}><List size={17} /></button>
-                        <button className={onShelves ? 'on' : ''} aria-label="Wooden shelf view" title="Wooden shelf view" aria-pressed={onShelves} onClick={() => persist(configure({ libraryLayout: 'shelves' }))}><LibraryBig size={17} /></button>
+                        <button className={layout === 'grid' ? 'on' : ''} aria-label="Grid view" title="Grid view" aria-pressed={layout === 'grid'} onClick={() => changeLayout('grid')}><LayoutGrid size={16} /></button>
+                        <button className={layout === 'list' ? 'on' : ''} aria-label="List view" title="List view" aria-pressed={layout === 'list'} onClick={() => changeLayout('list')}><List size={17} /></button>
+                        <button className={onShelves ? 'on' : ''} aria-label="Wooden shelf view" title="Wooden shelf view" aria-pressed={onShelves} onClick={() => changeLayout('shelves')}><LibraryBig size={17} /></button>
                       </div>
                     </div>
                   </div>
+                  {onShelves && view === 'library' && categories.length > 0 && <div className="category-chips" role="group" aria-label="Filter by category">
+                    {categoryOptions.map(([value, count]) => <button key={value} aria-pressed={category === value} onClick={() => pickCategory(value)}>{categoryLabel(value)} <small>({count})</small></button>)}
+                  </div>}
                   {!ready && <div className="empty">Loading your library…</div>}
-                  {ready && !rows.length && <div className="empty"><BookOpen size={30} /><h3>{query ? 'No matching books' : view === 'favorites' ? 'No favorites yet' : view === 'recent' ? 'No books opened yet' : 'No books here yet'}</h3>
+                  {ready && !rows.length && <div className="empty"><BookOpen size={30} /><h3>{query || (onShelves && category) ? 'No matching books' : view === 'favorites' ? 'No favorites yet' : view === 'recent' ? 'No books opened yet' : 'No books here yet'}</h3>
                     <p>{query ? 'Try another title or category.' : view === 'favorites' ? 'Use the heart on any book to save it here.' : collection ? 'Use a book’s menu to move it into this collection.' : 'Upload a PDF to start reading.'}</p>
                     {!query && view === 'library' && <button className="primary-button" onClick={() => setDialog({ kind: 'upload' })}><FileUp size={16} /> Upload PDF</button>}
                   </div>}
@@ -325,15 +386,23 @@ export default function App() {
                         <button className="danger" onClick={() => { setMenu(undefined); setDialog({ kind: 'delete', book }) }}><Trash2 size={16} /> Delete</button>
                       </div></>}
                     </div></div>
-                  </article>)}</div>
+                  </article>)}
+                    {onShelves && rows.length > 0 && <>
+                      <img src="/shelf/vine.webp" alt="" className="shelf-decor shelf-vine" />
+                      <img src={lightAppearance ? '/shelf/globe.webp' : '/shelf/hourglass.webp'} alt="" className="shelf-decor shelf-ornament" />
+                    </>}
+                  </div>
                 </section>}
               </>}
           </main>
-          <footer className="mobile-navigation">{navigation.slice(0, 3).map(({ key, label, icon: Icon }) => <button key={key} className={view === key ? 'active' : ''} onClick={() => navigate(key)}><Icon size={19} />{label}</button>)}<button className={view === 'settings' ? 'active' : ''} onClick={() => navigate('settings')}><SettingsIcon size={19} />Settings</button></footer>
+          <footer className="mobile-navigation">
+            {(onShelves ? shelfNavigation : navigation.slice(0, 3)).map(({ key, label, icon: Icon }) => <button key={key} className={view === key ? 'active' : ''} aria-current={view === key ? 'page' : undefined} onClick={() => navigate(key)}><Icon size={19} />{key === 'recent' ? 'Recent' : label}</button>)}
+            {!onShelves && <button className={view === 'settings' ? 'active' : ''} onClick={() => navigate('settings')}><SettingsIcon size={19} />Settings</button>}
+          </footer>
         </div>
       </div>}
     {dragging && <div className="drag-overlay" onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); void importFiles(event.dataTransfer.files) }}><FileUp size={40} /> Drop PDFs to add them to Folio</div>}
-    {dialog && <Modal title={{ upload: 'Upload PDFs', install: 'Install Folio', clear: 'Clear your library?', collection: 'New collection', delete: 'Delete this book?', rename: 'Rename book', move: 'Move to collection', deleteCollection: 'Delete this collection?' }[dialog.kind]} close={() => setDialog(undefined)}>
+    {dialog && <Modal title={{ upload: 'Upload PDFs', install: 'Install Folio', filter: 'Filter books', clear: 'Clear your library?', collection: 'New collection', delete: 'Delete this book?', rename: 'Rename book', move: 'Move to collection', deleteCollection: 'Delete this collection?' }[dialog.kind]} close={() => setDialog(undefined)}>
       {dialog.kind === 'upload' ? <><button className="drop-zone" onClick={() => files.current?.click()} onDragOver={event => {
         event.preventDefault()
         event.stopPropagation()
@@ -343,7 +412,9 @@ export default function App() {
         setDragging(false)
         void importFiles(event.dataTransfer.files)
       }}><FileUp size={29} /><strong>Choose PDF files</strong><span>Or drag and drop them here</span></button><p className="muted">Documents are processed and stored on this device.</p></> : dialog.kind === 'install' ?
-      <><p className="muted">Open your browser’s menu and look for <strong>Install app</strong> or <strong>Add to Home Screen</strong>. On iPhone or iPad, open Folio in Safari and use the Share menu.</p><button className="secondary-button" onClick={() => setDialog(undefined)}><Download size={16} /> Done</button></> :
+      <><p className="muted">Open your browser’s menu and look for <strong>Install app</strong> or <strong>Add to Home Screen</strong>. On iPhone or iPad, open Folio in Safari and use the Share menu.</p><button className="secondary-button" onClick={() => setDialog(undefined)}><Download size={16} /> Done</button></> : dialog.kind === 'filter' ? <div className="shelf-filter-options">
+        {categoryOptions.map(([value, count]) => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => { pickCategory(value); setDialog(undefined) }}>{categoryLabel(value)} <span>{count}</span></button>)}
+      </div> :
         <form onSubmit={handleDialog}>
           {dialog.kind === 'rename' && <label>Book title<input name="name" autoFocus required maxLength={180} defaultValue={dialog.book.title} /></label>}
           {dialog.kind === 'collection' && <label>Collection name<input name="name" autoFocus required maxLength={60} placeholder="e.g. Research papers" /></label>}
