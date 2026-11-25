@@ -19,6 +19,7 @@ export default function ReadingCompanion({ page, mode, available, reducedMotion,
   const trigger = useRef<HTMLButtonElement>(null)
   const attempt = useRef(0)
   const asked = useRef(new Set<number>())
+  const variations = useRef(new Map<number, number>())
   const lastQuestion = useRef(0)
   const [tabVisible, setTabVisible] = useState(() => !document.hidden)
   const [pending, setPending] = useState(false)
@@ -45,8 +46,9 @@ export default function ReadingCompanion({ page, mode, available, reducedMotion,
     if (automatic) asked.current.add(page)
     else setPending(true)
     let next: CompanionQuestion | undefined
+    const variation = variations.current.get(page) ?? 0
     try {
-      next = questionForPage(await readPage(page), page)
+      next = questionForPage(await readPage(page), page, variation)
     } catch {
       // Some scanned or protected documents offer no usable text.
     }
@@ -54,6 +56,7 @@ export default function ReadingCompanion({ page, mode, available, reducedMotion,
     setPending(false)
     if (document.hidden || document.querySelector('dialog[open]')) return
     if (automatic && (!next || window.getSelection()?.type === 'Range')) return
+    if (next) variations.current.set(page, variation + 1)
     asked.current.add(page)
     lastQuestion.current = Date.now()
     setResult({ page, question: next ?? quietQuestion })
