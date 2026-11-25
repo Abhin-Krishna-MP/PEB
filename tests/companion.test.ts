@@ -1,32 +1,33 @@
 import { expect, it } from 'vitest'
-import { questionForPage } from '../src/lib/companion'
+import { reactionForPage } from '../src/lib/companion'
 
-it('names the character and action and varies the next question', () => {
-  const excerpt = 'Mara hesitated before she brought the letter to the blue door.'
-  const text = 'The street was quiet and the lamps were burning low. ' + excerpt
-  expect(questionForPage(text, 1)).toEqual({
-    excerpt,
-    prompt: 'Why might Mara have hesitated before she brought the letter to the blue door?',
-  })
-  expect(questionForPage(text, 1, 1)?.prompt).toBe('What else could Mara have done before she brought the letter to the blue door?')
+it.each([
+  ['amused', 'Mara burst out laughing when Eli put the saucepan on his head.'],
+  ['afraid', 'Mara heard footsteps behind her in the dark and her heart pounded.'],
+  ['afraid', 'Mara glanced over her shoulder again as the hallway fell silent.'],
+  ['suspicious', 'Eli hid the brass key beneath the loose floorboard.'],
+  ['startled', 'Mara gasped as the door flew open.'],
+  ['tender', 'Mara whispered goodbye one last time.'],
+  ['curious', 'Mara hesitated before she brought the letter to the blue door.'],
+] as const)('chooses a %s expression for a specific story beat', (mood, passage) => {
+  expect(reactionForPage(passage, { words: 100 })?.mood).toBe(mood)
 })
 
-it('asks about the actual objects and choices in the text', () => {
-  expect(questionForPage('Eli hid the brass key beneath the loose floorboard.', 1)?.prompt)
-    .toBe('Why might Eli want to keep “the brass key beneath the loose floorboard” out of sight?')
-  expect(questionForPage('Nora refused to burn the map before the meeting.', 1)?.prompt)
-    .toContain('Nora')
-  expect(questionForPage('Nora refused to burn the map before the meeting.', 1)?.prompt)
-    .toContain('burn the map')
-  expect(questionForPage('She found the missing lantern in the garden.', 1, 1)?.prompt)
-    .toBe('What might she infer from “the missing lantern in the garden” about what happened earlier?')
+it('connects relief to earlier tension and varies the line on familiar beats', () => {
+  const text = 'Mara sighed with relief when she saw the garden gate.'
+  const first = reactionForPage(text, { previous: 'danger' })
+  expect(first?.line).toBe('Oh, thank goodness. I can breathe again.')
+  expect(reactionForPage(text, { previous: 'danger', recent: [first!.line] })?.line)
+    .toBe('Okay… my tail can come out now.')
 })
 
-it('uses a concrete description or phrase when there is no character action', () => {
-  expect(questionForPage('The rooms upstairs smelled of pine and rain.', 1)?.prompt)
-    .toBe('What does the smell of pine and rain suggest about the setting?')
-  expect(questionForPage('From the landing, the red lantern hung on its hook.', 1)?.prompt)
-    .toBe('What does the passage tell you about “the red lantern”?')
-  expect(questionForPage('      ', 1)).toBeUndefined()
-  expect(questionForPage('8 12 34 56 78 90 12 34 56 78 90\n1', 2)).toBeUndefined()
+it('waits silently on quiet text and skips unread and already reacted-to beats', () => {
+  const quiet = 'The blue room was warm and the bread rose beside the window. '
+  const twist = 'Mara gasped as the door flew open.'
+  expect(reactionForPage(quiet)).toBeUndefined()
+  expect(reactionForPage('Mara forced a hollow laugh at his joke.', { words: 100 })).toBeUndefined()
+  expect(reactionForPage(quiet + twist, { words: 12 })).toBeUndefined()
+  const first = reactionForPage(quiet + twist, { words: 40 })!
+  expect(first.mood).toBe('startled')
+  expect(reactionForPage(quiet + twist, { words: 40, seen: new Set([first.stamp]) })).toBeUndefined()
 })
