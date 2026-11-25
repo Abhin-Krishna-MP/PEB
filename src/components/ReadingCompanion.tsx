@@ -3,6 +3,7 @@ import { BookOpen, Bookmark, Check, Link2, MessageCircle, Sparkles, X } from 'lu
 import { quietTapLine, reactionForPage, type BeatKind, type SpiritMood } from '../lib/companion'
 import { pageInsight, relatedPage, type PageInsight } from '../lib/readingInsights'
 import type { CompanionMode } from '../lib/model'
+import BookSpirit from './BookSpirit'
 
 type Action = 'recap' | 'question' | 'bookmark' | 'connect'
 type Moment = { page: number; mood: SpiritMood; kind?: BeatKind; line?: string; action?: Action }
@@ -227,10 +228,8 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
       </div>}
     </div>
     <div className="spirit-perch">
-      <button className="companion-pet" aria-label="Hear from the book spirit" aria-expanded={!!current?.line} aria-controls={bubbleId}
-        title="Hear from the book spirit" onClick={() => void perform()}>
-        <span className="companion-sprite" data-mood={current?.mood ?? idle} data-beat={current?.kind} aria-hidden="true" />
-      </button>
+      <BookSpirit page={page} mood={current?.mood ?? idle} beat={current?.kind} speaking={!!current?.line}
+        reducedMotion={reducedMotion} bubbleId={bubbleId} onTap={() => void perform()} />
       <button ref={sparkle} className="spirit-toggle" aria-label="Companion prompts" aria-controls={promptsId} aria-expanded={prompts}
         title="Companion prompts" onClick={togglePrompts}>{prompts ? <X size={15} /> : <Sparkles size={16} />}</button>
     </div>

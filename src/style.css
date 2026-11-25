@@ -774,33 +774,10 @@ dialog::backdrop { background: #07090bd1; }
   pointer-events: auto;
   touch-action: manipulation;
 }
-.companion-sprite {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: url('./assets/folio-spirit.webp') 50% 0 / 300% 200% no-repeat;
-  transform-origin: 50% 77%;
-  animation: spirit-hover 5.4s ease-in-out infinite;
-}
-.companion-sprite[data-mood=curious] { background-position: 0 0; animation-name: spirit-peek; }
-.companion-sprite[data-mood=sleepy] { background-position: 100% 0; animation-duration: 8s; }
-.companion-sprite[data-mood=focused] { background-position: 0 100%; }
-.companion-sprite[data-mood=surprised] { background-position: 50% 100%; animation: spirit-startle .64s ease-out, spirit-hover 5s .64s ease-in-out infinite; }
-.companion-sprite[data-mood=encouraging] { background-position: 100% 100%; }
-.companion-sprite[data-beat=humor] { animation: spirit-laugh .55s ease-in-out 2, spirit-hover 5.4s 1.1s ease-in-out infinite; }
-.companion-sprite:is([data-beat=danger], [data-beat=unease]) { animation: spirit-shiver 1.1s ease-in-out, spirit-hover 6s 1.1s ease-in-out infinite; }
-.companion-sprite[data-beat=grief] { animation: spirit-bow 5s ease-in-out infinite; }
-@keyframes spirit-shiver { 25%, 55% { transform: translateX(-2px) scale(.96); } 40%, 70% { transform: translateX(1px) scale(.97); } }
-@keyframes spirit-bow { 50% { transform: translateY(2px) rotate(-4deg); } }
-@keyframes spirit-hover { 50% { transform: translateY(-3px) rotate(1.3deg); } }
-@keyframes spirit-peek { 50% { transform: translateY(-2px) rotate(-4deg); } }
-@keyframes spirit-startle { 28% { transform: translateY(-6px) rotate(3deg); } 70% { transform: translateY(1px) scaleY(.97); } }
-@keyframes spirit-laugh { 45% { transform: translateY(-3px) rotate(-3deg); } }
-.companion-still .companion-sprite { animation: none; }
 .spirit-toggle {
   position: absolute;
-  right: 0;
-  bottom: -4px;
+  right: -5px;
+  bottom: -7px;
   display: grid;
   width: 44px;
   height: 44px;

@@ -1,0 +1,180 @@
+.companion-sprite {
+  --head-tilt: -3deg;
+  --head-lift: 0%;
+  --wing-spread: 0deg;
+  --book-tilt: -2deg;
+  --gaze-x: -12%;
+  --gaze-y: 10%;
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  container-type: inline-size;
+}
+.companion-sprite::before {
+  content: '';
+  position: absolute;
+  inset: 13% 1% 8%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #ffcf6560 15%, #f6ba4826 43%, transparent 72%);
+}
+.spirit-torso {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 81%;
+}
+.spirit-wing {
+  position: absolute;
+  left: 6%;
+  top: 18%;
+  width: 31%;
+  height: 43%;
+}
+.spirit-wing.right { left: auto; right: 6%; transform: scaleX(-1); }
+.spirit-wing i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: url('../assets/spirit-wing.webp') center / 100% 100% no-repeat;
+  transform-origin: 95% 92%;
+  transform: rotate(var(--wing-spread));
+  transition: transform .48s cubic-bezier(.18,.78,.25,1.2);
+  animation: spirit-wing-breathe 4.7s ease-in-out infinite alternate;
+}
+.spirit-wing.right i { animation-delay: -.55s; transition-delay: 60ms; }
+.spirit-head {
+  position: absolute;
+  left: 25%;
+  top: 21%;
+  width: 50%;
+  height: 46%;
+  background: url('../assets/spirit-head.webp') center / 100% 100% no-repeat;
+  transform-origin: 50% 90%;
+  transform: translateY(var(--head-lift)) rotate(var(--head-tilt));
+  transition: transform .38s cubic-bezier(.2,.7,.3,1.22);
+}
+.spirit-face {
+  position: absolute;
+  inset: 0;
+  animation: spirit-read-line 5.8s infinite;
+}
+.spirit-eye-socket { position: absolute; top: 32%; left: 19%; width: 23%; height: 34%; transform: rotate(-6deg); }
+.spirit-eye-socket.right { left: 58%; transform: rotate(6deg); }
+.spirit-blink, .spirit-eye { position: absolute; inset: 0; display: block; }
+.spirit-eye {
+  overflow: hidden;
+  border-radius: 52% 52% 46% 46%;
+  background: linear-gradient(#eed2ab, #fff8e4 35%, #fff5d3);
+  border-top: max(1px, 1cqw) solid #653211;
+  transition: transform .23s, border-radius .23s, background .23s;
+}
+.spirit-gaze { position: absolute; inset: 0; }
+.companion-sprite[data-gesture=read][data-speaking=false]:is([data-mood=focused], [data-mood=happy]) .spirit-gaze {
+  animation: spirit-follow-words 5.8s infinite;
+}
+.spirit-iris {
+  position: absolute;
+  left: 13%;
+  top: 1%;
+  width: 77%;
+  height: 94%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 24%, #fff9df 0 11%, transparent 15%),
+    radial-gradient(ellipse at 50% 40%, #301806 28%, #5e2a0e 48%, #ba6a20 71%, #e9a84a);
+  transform: translate(var(--gaze-x), var(--gaze-y));
+  transition: transform .2s ease-out;
+}
+.spirit-mouth {
+  position: absolute;
+  left: 45%;
+  top: 64%;
+  width: 12%;
+  height: 8%;
+  border-bottom: max(1px, 1.3cqw) solid #6e3417;
+  border-radius: 0 0 65% 65%;
+}
+.spirit-specs {
+  position: absolute;
+  inset: 24% 0 28%;
+  background: url('../assets/spirit-glasses.webp') center / 100% 100% no-repeat;
+  opacity: 0;
+  transform: translateY(12%);
+  transition: opacity .2s, transform .3s;
+}
+.spirit-volume {
+  position: absolute;
+  left: 16%;
+  top: 51%;
+  width: 68%;
+  height: 43%;
+  transform-origin: 50% 62%;
+  transform: rotate(var(--book-tilt));
+  transition: transform .48s ease;
+  perspective: 180px;
+}
+.spirit-cover { position: absolute; inset: 0; background: url('../assets/spirit-book.webp') center / 100% 100% no-repeat; }
+.spirit-leaf {
+  position: absolute;
+  left: 49%;
+  top: 7%;
+  width: 42%;
+  height: 35%;
+  background: linear-gradient(115deg, #d6a66d, #fff6ca 50%, #efc78b);
+  border-radius: 8% 74% 16% 30%;
+  transform-origin: left bottom;
+  opacity: 0;
+}
+
+.companion-sprite[data-mood=focused] { --head-lift: 3%; --head-tilt: -5deg; --gaze-y: 19%; }
+.companion-sprite[data-mood=focused] .spirit-specs { opacity: 1; transform: none; }
+.companion-sprite[data-mood=curious] { --head-tilt: -10deg; --head-lift: -3%; --wing-spread: 6deg; }
+.companion-sprite[data-mood=surprised] { --head-lift: -11%; --wing-spread: 17deg; --gaze-y: 0%; }
+.companion-sprite[data-mood=surprised] .spirit-mouth { border: 0; background: #6e3417; height: 16%; border-radius: 50%; }
+.companion-sprite[data-mood=sleepy] { --head-tilt: 9deg; --head-lift: 10%; --wing-spread: -16deg; --book-tilt: 3deg; }
+.companion-sprite:is([data-mood=sleepy], [data-beat=humor], [data-mood=encouraging]) .spirit-eye {
+  top: 32%;
+  bottom: 14%;
+  background: transparent;
+  border-color: #6b3416;
+  border-radius: 65% 65% 0 0;
+}
+.companion-sprite:is([data-mood=sleepy], [data-beat=humor], [data-mood=encouraging]) .spirit-iris { opacity: 0; }
+.companion-sprite[data-mood=sleepy] .spirit-eye { transform: rotate(180deg); }
+.companion-sprite[data-beat=grief] { --head-lift: 9%; --wing-spread: -12deg; --book-tilt: 4deg; }
+.companion-sprite[data-beat=deception] .spirit-eye-socket.left { transform: rotate(14deg) scaleY(.75); }
+.companion-sprite[data-beat=humor] .spirit-torso { animation: spirit-chuckle .51s ease-in-out 2; }
+.companion-sprite:is([data-beat=danger], [data-beat=unease]) .spirit-torso { animation: spirit-shudder .72s ease-out; }
+.companion-sprite[data-speaking=true] .spirit-mouth { animation: spirit-murmur .42s ease-in-out 3; }
+
+.companion-sprite[data-gesture=notice] { --head-tilt: 4deg; --head-lift: -10%; --wing-spread: 14deg; --book-tilt: 5deg; --gaze-x: var(--attention-x, 0%); --gaze-y: var(--attention-y, 0%); }
+.companion-sprite[data-gesture=stretch] { --wing-spread: 23deg; --head-tilt: -9deg; --head-lift: -6%; --book-tilt: 4deg; }
+.companion-sprite[data-gesture=turn-next] { --head-tilt: -13deg; --gaze-x: -24%; --wing-spread: 12deg; --book-tilt: -7deg; }
+.companion-sprite[data-gesture=turn-back] { --head-tilt: 13deg; --gaze-x: 24%; --wing-spread: 12deg; --book-tilt: 7deg; }
+.companion-sprite[data-gesture^=turn] .spirit-leaf { animation: spirit-leaf-turn .85s .12s ease-in-out both; }
+.companion-sprite[data-gesture=turn-back] .spirit-leaf { animation-direction: reverse; }
+.companion-sprite:is([data-mood=sleepy], [data-speaking=true], :not([data-gesture=read])) .spirit-face { animation: none; }
+@keyframes spirit-read-line {
+  0%, 100% { transform: translate(-2%, 2%); }
+  22% { transform: translate(0, 2.4%); }
+  48%, 66% { transform: translate(3%, 3%); }
+  74% { transform: translate(-2%, 4%); }
+}
+@keyframes spirit-follow-words {
+  0%, 14% { transform: translate(-10%, 0); }
+  19%, 36% { transform: translate(-2%, 2%); }
+  41%, 57% { transform: translate(6%, 2%); }
+  62%, 79% { transform: translate(14%, 4%); }
+  84%, 100% { transform: translate(-10%, 0); }
+}
+@keyframes spirit-wing-breathe { to { rotate: 7deg; } }
+@keyframes spirit-chuckle { 42% { transform: scaleY(.94) rotate(-2deg); } 72% { transform: scaleY(1.025); } }
+@keyframes spirit-shudder { 22%, 54% { transform: translateX(-2%) rotate(-2deg); } 37%, 70% { transform: translateX(1.5%); } }
+@keyframes spirit-murmur { 50% { transform: scale(.8, 1.5); } }
+@keyframes spirit-leaf-turn {
+  0% { opacity: 0; transform: rotateY(0) rotateZ(-8deg); }
+  23% { opacity: 1; }
+  55% { opacity: 1; transform: translateY(-50%) rotateY(-70deg) rotateZ(-22deg); }
+  100% { opacity: 0; transform: rotateY(-172deg) rotateZ(-3deg); }
+}
+.companion-still .companion-sprite * { animation: none !important; transition: none !important; }
