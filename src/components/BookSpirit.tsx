@@ -4,8 +4,13 @@ import './BookSpirit.css'
 
 type Gesture = 'read' | 'notice' | 'stretch' | 'turn-next' | 'turn-back'
 
-export default function BookSpirit({ page, mood, beat, speaking, reducedMotion, bubbleId, onTap }: {
+const marks: Partial<Record<SpiritMood, string[]>> = {
+  sleepy: ['z', 'z', 'Z'], surprised: ['!'], curious: ['?'], encouraging: ['✦', '✦'],
+}
+
+export default function BookSpirit({ page, reactionId, mood, beat, speaking, reducedMotion, bubbleId, onTap }: {
   page: number
+  reactionId?: number
   mood: SpiritMood
   beat?: BeatKind
   speaking: boolean
@@ -58,9 +63,10 @@ export default function BookSpirit({ page, mood, beat, speaking, reducedMotion, 
     }
     next = window.setTimeout(blink, 1900 + Math.random() * 1900)
     return () => { window.clearTimeout(next); blinks.forEach(animation => animation.cancel()) }
-  }, [mood, beat, speaking, reducedMotion, move])
+  }, [reactionId, mood, beat, speaking, reducedMotion, move])
 
   const lookUp = () => move('notice', 1500)
+  const accents = mood === 'sleepy' || reactionId !== undefined ? marks[mood] : undefined
   return <button className="companion-pet" aria-label="Hear from the book spirit" aria-expanded={speaking} aria-controls={bubbleId}
     title="Hear from the book spirit"
     onPointerEnter={event => { if (event.pointerType === 'mouse') lookUp() }}
@@ -75,13 +81,13 @@ export default function BookSpirit({ page, mood, beat, speaking, reducedMotion, 
     onFocus={event => { if (event.currentTarget.matches(':focus-visible')) lookUp() }}
     onClick={() => { lookUp(); onTap() }}>
     <span ref={figure} className="companion-sprite" data-mood={mood} data-beat={beat} data-gesture={gesture} data-speaking={speaking} aria-hidden="true">
-      <span className="spirit-torso">
+      <span className="spirit-torso" key={reactionId ?? 'idle'}>
         <span className="spirit-wing left"><i /></span>
         <span className="spirit-wing right"><i /></span>
         <span className="spirit-head">
           <span className="spirit-face">
             {['left', 'right'].map(side => <span key={side} className={'spirit-eye-socket ' + side}>
-              <span className="spirit-blink"><span className="spirit-eye"><span className="spirit-gaze"><i className="spirit-iris" /></span></span></span>
+              <span className="spirit-blink"><span className="spirit-eye"><span className="spirit-gaze"><i className="spirit-iris" /></span></span><i className="spirit-lid" /></span>
             </span>)}
             <i className="spirit-mouth" />
             <i className="spirit-specs" />
@@ -92,6 +98,9 @@ export default function BookSpirit({ page, mood, beat, speaking, reducedMotion, 
           <i className="spirit-cover" />
         </span>
       </span>
+      {accents && <span key={`${reactionId ?? 'idle'}-${mood}`} className={`spirit-emote emote-${mood}`}>
+        {accents.map((mark, index) => <i key={index}>{mark}</i>)}
+      </span>}
     </span>
   </button>
 }

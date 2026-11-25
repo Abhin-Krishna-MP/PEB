@@ -45,10 +45,10 @@
 .spirit-wing.right i { animation-delay: -.55s; transition-delay: 60ms; }
 .spirit-head {
   position: absolute;
-  left: 25%;
-  top: 21%;
-  width: 50%;
-  height: 46%;
+  left: 22%;
+  top: 17%;
+  width: 56%;
+  height: 56%;
   background: url('../assets/spirit-head.webp') center / 100% 100% no-repeat;
   transform-origin: 50% 90%;
   transform: translateY(var(--head-lift)) rotate(var(--head-tilt));
@@ -70,7 +70,7 @@
   transition: transform .23s, border-radius .23s, background .23s;
 }
 .spirit-gaze { position: absolute; inset: 0; }
-.companion-sprite[data-gesture=read][data-speaking=false]:is([data-mood=focused], [data-mood=happy]) .spirit-gaze {
+.companion-sprite[data-gesture=read][data-speaking=false]:not([data-beat]):is([data-mood=focused], [data-mood=happy]) .spirit-gaze {
   animation: spirit-follow-words 5.8s infinite;
 }
 .spirit-iris {
@@ -105,9 +105,9 @@
 .spirit-volume {
   position: absolute;
   left: 16%;
-  top: 51%;
+  top: 57%;
   width: 68%;
-  height: 43%;
+  height: 34%;
   transform-origin: 50% 62%;
   transform: rotate(var(--book-tilt));
   transition: transform .48s ease;
@@ -132,15 +132,39 @@
 .companion-sprite[data-mood=surprised] { --head-lift: -11%; --wing-spread: 17deg; --gaze-y: 0%; }
 .companion-sprite[data-mood=surprised] .spirit-mouth { border: 0; background: #6e3417; height: 16%; border-radius: 50%; }
 .companion-sprite[data-mood=sleepy] { --head-tilt: 9deg; --head-lift: 10%; --wing-spread: -16deg; --book-tilt: 3deg; }
-.companion-sprite:is([data-mood=sleepy], [data-beat=humor], [data-mood=encouraging]) .spirit-eye {
-  top: 32%;
-  bottom: 14%;
-  background: transparent;
-  border-color: #6b3416;
-  border-radius: 65% 65% 0 0;
+.spirit-lid {
+  position: absolute;
+  inset: 35% 0 15%;
+  border-top: max(1.4px, 1.6cqw) solid #713810;
+  border-radius: 60% 60% 0 0;
+  opacity: 0;
 }
-.companion-sprite:is([data-mood=sleepy], [data-beat=humor], [data-mood=encouraging]) .spirit-iris { opacity: 0; }
-.companion-sprite[data-mood=sleepy] .spirit-eye { transform: rotate(180deg); }
+.companion-sprite[data-mood=happy] .spirit-eye { animation: spirit-smile-eyes 1.65s ease-in-out; }
+.companion-sprite[data-mood=happy] .spirit-lid { animation: spirit-smile-lids 1.65s ease-in-out; }
+.companion-sprite:is([data-beat=humor], [data-mood=encouraging], [data-mood=sleepy]) .spirit-eye {
+  opacity: 0;
+  animation: spirit-close-eyes .52s ease-out;
+}
+.companion-sprite:is([data-beat=humor], [data-mood=encouraging], [data-mood=sleepy]) .spirit-lid {
+  opacity: 1;
+  animation: spirit-close-lids .52s ease-out;
+}
+.companion-sprite[data-mood=sleepy] .spirit-eye,
+.companion-sprite[data-mood=sleepy] .spirit-lid { animation-duration: 1.25s; }
+.companion-sprite[data-mood=sleepy] .spirit-lid { border-top: 0; border-bottom: max(1.4px, 1.6cqw) solid #713810; border-radius: 0 0 65% 65%; }
+.companion-sprite[data-mood=sleepy] .spirit-torso { animation: spirit-doze 4.6s ease-in-out infinite; }
+.companion-sprite[data-mood=surprised] .spirit-torso { animation: spirit-recoil .85s ease-out; }
+.companion-sprite[data-mood=surprised] .spirit-eye { transform: scale(1.08); animation: spirit-widen .68s ease-out; }
+.companion-sprite[data-mood=encouraging] .spirit-torso { animation: spirit-nod 1.2s ease-in-out; }
+.companion-sprite[data-mood=curious] .spirit-torso { animation: spirit-listen 1.2s ease-in-out; }
+.companion-sprite[data-beat=grief] .spirit-torso { animation: spirit-bow 1.8s ease-in-out both; }
+.companion-sprite:is([data-beat=humor], [data-mood=encouraging]) .spirit-mouth {
+  width: 17%; left: 42%; height: 10%;
+  background: #733b16;
+  border-radius: 18% 18% 60% 60%;
+}
+.companion-sprite[data-beat=deception] .spirit-gaze { animation: spirit-sidelong 1.45s ease-in-out both; }
+.companion-sprite[data-beat=relief] .spirit-torso { animation: spirit-exhale 1.5s ease-in-out; }
 .companion-sprite[data-beat=grief] { --head-lift: 9%; --wing-spread: -12deg; --book-tilt: 4deg; }
 .companion-sprite[data-beat=deception] .spirit-eye-socket.left { transform: rotate(14deg) scaleY(.75); }
 .companion-sprite[data-beat=humor] .spirit-torso { animation: spirit-chuckle .51s ease-in-out 2; }
@@ -177,4 +201,56 @@
   55% { opacity: 1; transform: translateY(-50%) rotateY(-70deg) rotateZ(-22deg); }
   100% { opacity: 0; transform: rotateY(-172deg) rotateZ(-3deg); }
 }
+.spirit-emote {
+  position: absolute;
+  top: 0;
+  left: 71%;
+  width: 25%;
+  height: 24%;
+  color: #ffe7a4;
+  font: bold 20cqw/1 Georgia, serif;
+  -webkit-text-stroke: .55px #895022;
+  paint-order: stroke fill;
+  text-shadow: 0 1px 2px #633919;
+}
+.spirit-emote i { position: absolute; left: 0; bottom: 0; font-style: normal; opacity: 0; }
+.emote-sleepy { font-size: 14cqw; }
+.emote-sleepy i { animation: spirit-dream 3.4s ease-out infinite; }
+.emote-sleepy i:nth-child(2) { animation-delay: .85s; }
+.emote-sleepy i:nth-child(3) { animation-delay: 1.7s; }
+.emote-surprised i { animation: spirit-exclaim 1.7s ease-out both; }
+.emote-curious i { animation: spirit-wonder 2.1s ease-out both; }
+.emote-encouraging i { font-size: 12cqw; animation: spirit-glint 1.25s .15s ease-in-out both; }
+.emote-encouraging i:nth-child(2) { left: 48%; bottom: 32%; animation-delay: .45s; }
+@keyframes spirit-close-eyes { from { opacity: 1; transform: scaleY(1); } 80% { opacity: .8; } to { opacity: 0; transform: scaleY(.05); } }
+@keyframes spirit-close-lids { 0%, 44% { opacity: 0; transform: translateY(20%) scaleY(.1); } to { opacity: 1; transform: none; } }
+@keyframes spirit-smile-eyes { 0%, 8%, 100% { opacity: 1; transform: none; } 34%, 71% { opacity: 0; transform: scaleY(.05); } }
+@keyframes spirit-smile-lids { 0%, 12%, 100% { opacity: 0; transform: scaleY(.1); } 35%, 70% { opacity: 1; transform: none; } }
+@keyframes spirit-doze { 55% { transform: translateY(2%) rotate(4deg) scaleY(.97); } }
+@keyframes spirit-recoil { 16% { transform: translateY(2%) scale(1.05,.92); } 42% { transform: translateY(-7%) rotate(-4deg); } 74% { transform: translateY(1%) rotate(1deg); } }
+@keyframes spirit-widen { 18% { transform: scale(.93,.68); } 52% { transform: scale(1.16); } }
+@keyframes spirit-nod { 30%, 76% { transform: rotate(3deg) scaleY(.96); } 53% { transform: translateY(-2%); } }
+@keyframes spirit-listen { 38%, 70% { transform: rotate(-6deg); } }
+@keyframes spirit-bow { to { transform: rotate(5deg) translateY(3%); } }
+@keyframes spirit-sidelong { 25%, 90%, 100% { transform: translate(-19%, 4%); } 61% { transform: translate(13%, 4%); } }
+@keyframes spirit-exhale { 24% { transform: scale(.98,1.04); } 76% { transform: translateY(2%) scale(1.04,.96); } }
+@keyframes spirit-dream {
+  0% { opacity: 0; transform: translate(-55%, 20%) scale(.45); }
+  16% { opacity: 1; }
+  49% { opacity: .85; }
+  82%, 100% { opacity: 0; transform: translate(210%,-193%) scale(1.13) rotate(9deg); }
+}
+@keyframes spirit-exclaim {
+  0% { opacity: 0; transform: translateY(25%) scale(.35); }
+  16% { opacity: 1; transform: translateY(-46%) rotate(9deg) scale(1.2); }
+  33%, 72% { opacity: 1; transform: translateY(-22%) rotate(7deg); }
+  100% { opacity: 0; transform: translateY(-53%) scale(.84); }
+}
+@keyframes spirit-wonder {
+  0% { opacity: 0; transform: translateY(15%) rotate(-15deg) scale(.65); }
+  30%, 70% { opacity: 1; transform: translateY(-27%) rotate(9deg); }
+  100% { opacity: 0; transform: translateY(-48%) rotate(4deg); }
+}
+@keyframes spirit-glint { 0%, 100% { opacity: 0; transform: scale(.35); } 50% { opacity: 1; transform: scale(1.05) rotate(12deg); } }
+.companion-still .spirit-emote i:first-child { opacity: 1; }
 .companion-still .companion-sprite * { animation: none !important; transition: none !important; }

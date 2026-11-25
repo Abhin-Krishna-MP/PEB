@@ -6,7 +6,7 @@ import type { CompanionMode } from '../lib/model'
 import BookSpirit from './BookSpirit'
 
 type Action = 'recap' | 'question' | 'bookmark' | 'connect'
-type Moment = { page: number; mood: SpiritMood; kind?: BeatKind; line?: string; action?: Action }
+type Moment = { reactionId?: number; page: number; mood: SpiritMood; kind?: BeatKind; line?: string; action?: Action }
 const speechCooldown = 72_000
 const noticeTime = {
   doubt: 920, deception: 1120, surprise: 260, danger: 880, unease: 1380, humor: 450, grief: 1260, relief: 720, warmth: 800,
@@ -171,6 +171,7 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
       } else return
     }
     if (reaction && !action) previousBeat.current = { page, kind: reaction.kind }
+    expression.reactionId = token
     setMoment(expression)
     if (automatic && Date.now() - lastSpeech.current < speechCooldown) {
       animationTimers.current.push(window.setTimeout(() => setMoment(undefined), 3600))
@@ -228,7 +229,7 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
       </div>}
     </div>
     <div className="spirit-perch">
-      <BookSpirit page={page} mood={current?.mood ?? idle} beat={current?.kind} speaking={!!current?.line}
+      <BookSpirit page={page} reactionId={current?.reactionId} mood={current?.mood ?? idle} beat={current?.kind} speaking={!!current?.line}
         reducedMotion={reducedMotion} bubbleId={bubbleId} onTap={() => void perform()} />
       <button ref={sparkle} className="spirit-toggle" aria-label="Companion prompts" aria-controls={promptsId} aria-expanded={prompts}
         title="Companion prompts" onClick={togglePrompts}>{prompts ? <X size={15} /> : <Sparkles size={16} />}</button>
