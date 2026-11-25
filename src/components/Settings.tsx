@@ -1,5 +1,5 @@
 import { Database, Download, Monitor, ShieldCheck, Trash2 } from 'lucide-react'
-import { fileSize, type Preferences } from '../lib/model'
+import { companionModes, fileSize, type Preferences } from '../lib/model'
 import { useLibrary } from '../lib/store'
 
 export default function Settings({ install, clear, usage, quota, toast }: {
@@ -23,6 +23,7 @@ export default function Settings({ install, clear, usage, quota, toast }: {
       {select('theme', 'Page theme', ['Original', 'Light', 'Sepia', 'Dark'])}
       {select('fit', 'Page fit', ['Fit page', 'Fit width'])}
       {select('zoom', 'Default zoom', [75, 100, 125, 150, 200])}
+      {select('companion', 'Reading companion', companionModes)}
       <label className="setting-row">Page-turn animation<input type="checkbox" checked={preferences.animation} onChange={event => choose('animation', event.target.checked)} /></label>
       <label className="setting-row">Reduce motion<input type="checkbox" checked={preferences.reducedMotion} onChange={event => choose('reducedMotion', event.target.checked)} /></label>
     </div>

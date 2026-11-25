@@ -8,10 +8,11 @@ import { clampPage, adjacentPage } from '../lib/flip'
 import { loadPdf, outline, pageText, type OutlineEntry, type PasswordRequest } from '../lib/pdf'
 import { readFile } from '../lib/storage'
 import { useLibrary } from '../lib/store'
-import type { Annotation, Book, Fit, Mode, Theme } from '../lib/model'
+import { companionModes, type Annotation, type Book, type CompanionMode, type Fit, type Mode, type Theme } from '../lib/model'
 import { BookLoading, Modal } from './Common'
 import FlipBook from './FlipBook'
 import PdfPage, { clearPageRasters } from './PdfPage'
+import ReadingCompanion from './ReadingCompanion'
 
 type Pane = 'pages' | 'outline' | 'search' | 'notes' | 'theme'
 type SearchResult = { page: number; text: string }
@@ -73,6 +74,14 @@ export default function Reader({ book, file, close, password, toast }: { book: B
   const height = Math.round(width / ratio)
   const needsPanning = width * leafCount + (compact ? 16 : 30) > size.width || height + (compact ? 26 : 48) > size.height
   const reduced = preferences.reducedMotion || systemReduce
+  const readPage = useCallback(async (number: number) => {
+    if (!pdf) return ''
+    const cached = texts.current.get(number)
+    if (cached !== undefined) return cached
+    const text = await pageText(await pdf.getPage(number))
+    if (texts.current.size < 900) texts.current.set(number, text)
+    return text
+  }, [pdf])
   const scrollStep = height + 18
   const scrollWindow = Math.max(3, Math.ceil(size.height / scrollStep) + 1)
   const firstVisible = Math.max(1, page - scrollWindow)
@@ -151,11 +160,7 @@ export default function Reader({ book, file, close, password, toast }: { book: B
     if (!needle) {
       if (textStatus === 'unknown') {
         const numbers = [...new Set([1, clampPage(page, pdf.numPages)])]
-        void Promise.all(numbers.map(async number => {
-          const text = await pageText(await pdf.getPage(number))
-          if (live) texts.current.set(number, text)
-          return text
-        })).then(items => { if (live) setTextStatus(items.some(Boolean) ? 'available' : 'sample-empty') }).catch(() => undefined)
+        void Promise.all(numbers.map(readPage)).then(items => { if (live) setTextStatus(items.some(Boolean) ? 'available' : 'sample-empty') }).catch(() => undefined)
       }
       return () => { live = false }
     }
@@ -165,9 +170,8 @@ export default function Reader({ book, file, close, password, toast }: { book: B
       let lastUpdate = performance.now()
       try {
         for (let index = 1; index <= pdf.numPages && live; index++) {
-          const match = texts.current.get(index) ?? await pageText(await pdf.getPage(index))
+          const match = await readPage(index)
           if (!live) return
-          if (texts.current.size < 900) texts.current.set(index, match)
           foundText ||= !!match
           const pos = match.toLocaleLowerCase().indexOf(needle)
           if (pos >= 0) found.push({ page: index, text: (pos > 44 ? '…' : '') + match.slice(Math.max(0, pos - 44), pos + needle.length + 58) + (pos + needle.length + 58 < match.length ? '…' : '') })
@@ -182,7 +186,7 @@ export default function Reader({ book, file, close, password, toast }: { book: B
       } catch { if (live) setSearchError('PDF text could not be indexed.') }
     }, 200)
     return () => { live = false; window.clearTimeout(timer) }
-  }, [pdf, pane, query])
+  }, [pdf, pane, query, readPage])
   useEffect(() => {
     if (pane !== 'pages' || !thumbViewport.current) return
     thumbViewport.current.scrollTop = Math.max(0, (page - 2) * 141)
@@ -321,6 +325,9 @@ export default function Reader({ book, file, close, password, toast }: { book: B
           {controls && <><button className="menu-scrim" aria-label="Close reader options" onClick={() => setControls(false)} /><div className="dropdown options-popup">
             <label>Reading mode<select value={mode} onChange={event => setMode(event.target.value as Mode)}>{['Auto', 'Single page', 'Double page', 'Scroll'].map(value => <option key={value}>{value}</option>)}</select></label>
             <label>Page fit<select value={fit} onChange={event => setFit(event.target.value as Fit)}><option>Fit page</option><option>Fit width</option></select></label>
+            <label>Reading companion<select value={preferences.companion} onChange={event => {
+              void configure({ companion: event.target.value as CompanionMode }).catch(() => toast('Could not save the companion preference.'))
+            }}>{companionModes.map(value => <option key={value}>{value}</option>)}</select></label>
             <button onClick={() => togglePane('outline')}><ListTree size={17} /> Table of contents</button>
             <button onMouseDown={event => event.preventDefault()} onClick={() => { highlight(); setControls(false) }}><Highlighter size={17} /> Highlight selection</button>
             <button onClick={() => { setFocus(true); setControls(false); setPane(undefined) }}><Focus size={17} /> Distraction-free mode</button>
@@ -392,6 +399,9 @@ export default function Reader({ book, file, close, password, toast }: { book: B
       {!firstPageSettled && !error && <div className="reader-loading-splash">
         <BookLoading message={loading > 0 && !pdf ? `Loading your book · ${loading}%` : 'Loading your book…'} reducedMotion={reduced} />
       </div>}
+      <ReadingCompanion page={page} mode={preferences.companion}
+        available={firstPageSettled && !error && !focus && !pane && !controls && !note && !showExport}
+        reducedMotion={reduced} readPage={readPage} inset={Math.max(7, (size.width - width * leafCount) / 2 - 65)} />
     </div>
     {!focus && <footer className="reader-footer">
       {pdf && <>

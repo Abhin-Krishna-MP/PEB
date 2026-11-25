@@ -2,6 +2,8 @@ export type Theme = 'Original' | 'Light' | 'Sepia' | 'Dark'
 export type Mode = 'Auto' | 'Single page' | 'Double page' | 'Scroll'
 export type Fit = 'Fit page' | 'Fit width'
 export type LibraryLayout = 'grid' | 'list' | 'shelves'
+export const companionModes = ['Occasional', 'On tap', 'Off'] as const
+export type CompanionMode = typeof companionModes[number]
 export type Annotation = {
   id: string
   page: number
@@ -33,12 +35,13 @@ export type Preferences = {
   appearance: 'Dark' | 'Light' | 'System'
   mode: Mode
   animation: boolean
+  companion: CompanionMode
   reducedMotion: boolean
   zoom: number
   fit: Fit
 }
 export const defaults: Preferences = {
-  libraryLayout: 'grid', theme: 'Original', appearance: 'Dark', mode: 'Auto', animation: true, reducedMotion: false, zoom: 100, fit: 'Fit page',
+  libraryLayout: 'grid', theme: 'Original', appearance: 'Dark', mode: 'Auto', animation: true, companion: 'Occasional', reducedMotion: false, zoom: 100, fit: 'Fit page',
 }
 export const progress = (book: Book) => book.openedAt ? Math.round(book.page / Math.max(1, book.pages) * 100) : 0
 export function fileSize(bytes: number) {
