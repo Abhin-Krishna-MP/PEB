@@ -7,6 +7,7 @@ import {
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Cover, Logo, Modal } from './components/Common'
 import Settings from './components/Settings'
+import BookSpine from './components/BookSpine'
 import { fileSize, progress, type Book } from './lib/model'
 import { useLibrary } from './lib/store'
 import type { PasswordRequest } from './lib/pdf'
@@ -39,8 +40,10 @@ export default function App() {
   const [active, setActive] = useState(currentBook)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('added')
-  const [layout, setLayout] = useState<'grid' | 'list'>('grid')
+  const layout = preferences.libraryLayout
+  const onShelves = layout === 'shelves'
   const [menu, setMenu] = useState<string>()
+  const [menuAtStart, setMenuAtStart] = useState(false)
   const [mobile, setMobile] = useState(false)
   const [dialog, setDialog] = useState<Dialog>()
   const [message, setMessage] = useState('')
@@ -286,7 +289,11 @@ export default function App() {
                     <div className="shelf-title"><h2>{view === 'library' && !query ? 'Bookshelf' : 'Books'}</h2><span>{rows.length} {rows.length === 1 ? 'book' : 'books'}</span></div>
                     <div className="shelf-controls">
                       <label className="sort"><ArrowDownUp size={15} /><select aria-label="Sort books" value={sort} onChange={event => setSort(event.target.value)}><option value="added">Recently added</option><option value="recent">Last opened</option><option value="title">Title A–Z</option><option value="pages">Page count</option></select><ChevronDown size={14}/></label>
-                      <div className="view-toggle"><button className={layout === 'grid' ? 'on' : ''} aria-label="Grid view" aria-pressed={layout === 'grid'} onClick={() => setLayout('grid')}><LayoutGrid size={16} /></button><button className={layout === 'list' ? 'on' : ''} aria-label="List view" aria-pressed={layout === 'list'} onClick={() => setLayout('list')}><List size={17} /></button></div>
+                      <div className="view-toggle" role="group" aria-label="Library layout">
+                        <button className={layout === 'grid' ? 'on' : ''} aria-label="Grid view" title="Grid view" aria-pressed={layout === 'grid'} onClick={() => persist(configure({ libraryLayout: 'grid' }))}><LayoutGrid size={16} /></button>
+                        <button className={layout === 'list' ? 'on' : ''} aria-label="List view" title="List view" aria-pressed={layout === 'list'} onClick={() => persist(configure({ libraryLayout: 'list' }))}><List size={17} /></button>
+                        <button className={onShelves ? 'on' : ''} aria-label="Wooden shelf view" title="Wooden shelf view" aria-pressed={onShelves} onClick={() => persist(configure({ libraryLayout: 'shelves' }))}><LibraryBig size={17} /></button>
+                      </div>
                     </div>
                   </div>
                   {!ready && <div className="empty">Loading your library…</div>}
@@ -294,17 +301,25 @@ export default function App() {
                     <p>{query ? 'Try another title or category.' : view === 'favorites' ? 'Use the heart on any book to save it here.' : collection ? 'Use a book’s menu to move it into this collection.' : 'Upload a PDF to start reading.'}</p>
                     {!query && view === 'library' && <button className="primary-button" onClick={() => setDialog({ kind: 'upload' })}><FileUp size={16} /> Upload PDF</button>}
                   </div>}
-                  <div className={`books ${layout}`}>{rows.map(book => <article className="book-card" key={book.id}>
+                  <div className={`books ${layout}`} hidden={!rows.length}>{rows.map(book => <article className="book-card" key={book.id}>
                     <div className={`book-stage ${book.art === undefined ? 'stage-imported' : 'stage-' + book.art}`}>
-                      <button className="cover-button" onClick={() => openBook(book)} aria-label={'Open ' + book.title}><Cover book={book} /></button>
+                      <button className="cover-button" onClick={() => openBook(book)} aria-label={'Open ' + book.title} title={onShelves ? `${book.title} · ${book.pages} pages` : undefined}>
+                        {onShelves ? <BookSpine book={book} /> : <Cover book={book} />}
+                      </button>
                       <button className={`heart-button ${book.favorite ? 'hearted' : ''}`} aria-label={`${book.favorite ? 'Remove from favorites' : 'Add to favorites'}: ${book.title}`} aria-pressed={book.favorite} onClick={() => persist(edit(book.id, { favorite: !book.favorite }))}><Heart size={16} /></button>
                     </div>
-                    <div className="card-meta"><div className="card-description"><button className="book-title" onClick={() => openBook(book)}>{book.title}</button><div className="book-details"><span>{book.pages} pages</span><i /><span>{book.size ? fileSize(book.size) : 'Sample PDF'}</span>{book.annotations.some(entry => entry.kind === 'bookmark') && <Bookmark size={13} aria-label="Bookmarked" />}</div>
+                    <div className="card-meta">{!onShelves && <div className="card-description"><button className="book-title" onClick={() => openBook(book)}>{book.title}</button><div className="book-details"><span>{book.pages} pages</span><i /><span>{book.size ? fileSize(book.size) : 'Sample PDF'}</span>{book.annotations.some(entry => entry.kind === 'bookmark') && <Bookmark size={13} aria-label="Bookmarked" />}</div>
                       {layout === 'list' && book.openedAt > 1 && <div className="book-details">Opened {new Date(book.openedAt).toLocaleDateString()} · {progress(book)}% read</div>}
                       {book.openedAt > 0 && <div className="card-progress" title={progress(book) + '% read'}><i style={{ width: progress(book) + '%' }} /></div>}
-                    </div><div className="card-menu"><button className="icon-button" aria-label={'Options for ' + book.title} aria-expanded={menu === book.id} onClick={() => setMenu(menu === book.id ? undefined : book.id)}><Ellipsis size={19} /></button>
-                      {menu === book.id && <><button className="menu-scrim" aria-label="Close book options" onClick={() => setMenu(undefined)} /><div className="dropdown">
+                    </div>}<div className="card-menu"><button className="icon-button" aria-label={'Options for ' + book.title} aria-expanded={menu === book.id} onClick={event => {
+                      const shelf = event.currentTarget.closest('.shelves')
+                      const { left, right } = event.currentTarget.getBoundingClientRect()
+                      setMenuAtStart(!!shelf && right - shelf.getBoundingClientRect().left < 180 && document.documentElement.clientWidth - left >= 180)
+                      setMenu(menu === book.id ? undefined : book.id)
+                    }}><Ellipsis size={19} /></button>
+                      {menu === book.id && <><button className="menu-scrim" aria-label="Close book options" onClick={() => setMenu(undefined)} /><div className={`dropdown ${menuAtStart ? 'from-start' : ''}`}>
                         <button onClick={() => openBook(book)}><BookOpen size={16} /> Open book</button>
+                        {onShelves && <button onClick={() => { setMenu(undefined); persist(edit(book.id, { favorite: !book.favorite })) }}><Heart size={16} /> {book.favorite ? 'Remove from favorites' : 'Add to favorites'}</button>}
                         <button onClick={() => { setMenu(undefined); setDialog({ kind: 'rename', book }) }}><Pencil size={16} /> Rename</button>
                         <button onClick={() => { setMenu(undefined); setDialog({ kind: 'move', book }) }}><Folder size={16} /> Move to collection</button>
                         <button className="danger" onClick={() => { setMenu(undefined); setDialog({ kind: 'delete', book }) }}><Trash2 size={16} /> Delete</button>
