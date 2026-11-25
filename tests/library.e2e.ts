@@ -109,15 +109,46 @@ test.describe('interrupting a slow open', () => {
     try {
       await page.goto('/')
       await expect.poll(() => page.locator('.sidebar .brand-mark').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
-      await sampleOpen(page).click()
+      const initialSource = await sampleOpen(page).evaluate((button: HTMLButtonElement) => new Promise<string | null>(resolve => {
+        const observer = new MutationObserver(() => {
+          const loading = document.querySelector('.book-loading')
+          if (!loading) return
+          observer.disconnect()
+          resolve(loading.querySelector('img')?.getAttribute('src') ?? null)
+        })
+        observer.observe(document.body, { childList: true, subtree: true })
+        button.click()
+      }))
+      expect(initialSource).toMatch(/loading-.*\.gif$/)
       const artwork = page.locator('.book-loading-art')
       const artworkSource = () => artwork.evaluate(image => (image as HTMLImageElement).currentSrc)
       await expect.poll(artworkSource).toMatch(/loading-.*\.gif$/)
       await page.emulateMedia({ reducedMotion: 'reduce' })
-      await expect.poll(artworkSource).toMatch(/loading-still-.*\.webp$/)
+      await expect.poll(artworkSource).toMatch(/^data:image\/webp/)
       release.resolve()
       await expect(paper(page, 12)).toBeVisible()
       await expect(artwork).toHaveCount(0)
+    } finally {
+      release.resolve()
+    }
+  })
+
+  test('shows the GIF while an uploaded PDF is being prepared', async ({ page }) => {
+    const release = Promise.withResolvers<void>()
+    await page.route(/\/assets\/pdf-[^/]+\.js$/, async route => {
+      await release.promise
+      await route.continue().catch(() => undefined)
+    })
+    try {
+      await page.goto('/')
+      await expect(sampleOpen(page)).toBeVisible()
+      await filePicker(page).setInputFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: await createPdf(2) })
+      const progress = page.locator('.upload-progress')
+      await expect(progress.getByRole('status')).toContainText('Opening PDF')
+      await expect(progress.locator('img')).toHaveJSProperty('naturalWidth', 309)
+      release.resolve()
+      await expect(paper(page, 1)).toBeVisible()
+      await expect(progress).toHaveCount(0)
     } finally {
       release.resolve()
     }

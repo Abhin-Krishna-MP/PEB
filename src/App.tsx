@@ -198,6 +198,7 @@ export default function App() {
     if (importing.current || !selected.length || !ready) return
     importing.current = true
     setDialog(undefined)
+    setUpload('Opening PDF…')
     const added: Book[] = []
     const errors: string[] = []
     try {
@@ -457,6 +458,8 @@ export default function App() {
       event.preventDefault()
       resolvePassword(String(new FormData(event.currentTarget).get('password') ?? ''))
     }}><p className="muted">{password.incorrect ? 'That password was incorrect. Try again.' : 'This PDF is password-protected.'}</p><label>Password<input autoFocus key={String(password.incorrect)} name="password" type="password" required /></label><div className="dialog-actions"><button className="secondary-button" type="button" onClick={() => resolvePassword(null)}>Cancel</button><button className="primary-button" type="submit">Unlock</button></div></form></Modal>}
-    {(message || upload || updates) && <div className="toast" role="status">{upload ? <span className="spinner" /> : <Check size={17} />}<span>{upload || message || 'A new Folio version is available.'}</span>{updates && !message && !upload && <button className="secondary-button" onClick={() => void updateServiceWorker(true)}>Update now</button>}{message && !upload && <button className="icon-button" aria-label="Dismiss message" onClick={() => setMessage('')}><X size={16} /></button>}</div>}
+    {upload ? <div className="toast upload-progress">
+      <BookLoading message={upload} reducedMotion={preferences.reducedMotion} />
+    </div> : (message || updates) && <div className="toast" role="status"><Check size={17} /><span>{message || 'A new Folio version is available.'}</span>{updates && !message && <button className="secondary-button" onClick={() => void updateServiceWorker(true)}>Update now</button>}{message && <button className="icon-button" aria-label="Dismiss message" onClick={() => setMessage('')}><X size={16} /></button>}</div>}
   </div>
 }
