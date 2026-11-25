@@ -243,7 +243,11 @@ dialog::backdrop { background: #07090bd1; }
 .options-popup label select { padding: 5px 4px; }
 .reader-body { min-height: 0; display: flex; flex: 1; position: relative; }
 .reader-viewport { overflow: auto; flex: 1; min-width: 0; position: relative; background: radial-gradient(ellipse at center, var(--reading-glow), var(--bg) 80%); overscroll-behavior: contain; scrollbar-width: thin; }
-.book-centering { min-height: 100%; min-width: max-content; display: flex; align-items: center; justify-content: center; padding: 24px 15px; }
+.book-centering {
+  min-height: 100%; min-width: max-content; display: flex; align-items: center; justify-content: center; padding: 24px 15px;
+  /* A folded leaf can extend past the stage. Only the laid-flat book should affect scrolling. */
+  overflow: clip;
+}
 .book-centering.compact { padding: 13px 8px; }
 .reader-state { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); padding: 24px; text-align: center; font-size: 14px; }
 .reader-state > svg { color: var(--gold); }

@@ -227,6 +227,34 @@ test('persists light appearance and lets a dragged corner settle or turn', async
   await expect(paper(page, 13)).toBeVisible()
 })
 
+test('keeps the book and scroll area fixed throughout a page turn', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/')
+  await sampleOpen(page).click()
+  await expect(paper(page, 12)).toBeVisible()
+  const next = page.getByRole('button', { name: 'Next page' })
+  const frames = await next.evaluate(async (button: HTMLButtonElement) => {
+    const viewport = document.querySelector('.reader-viewport')!
+    const book = document.querySelector('.spread-pages')!
+    function snapshot() {
+      const { x, y, width, height } = book.getBoundingClientRect()
+      return [x, y, width, height, viewport.scrollWidth, viewport.scrollHeight, viewport.scrollLeft, viewport.scrollTop]
+    }
+    const initial = snapshot()
+    const during: number[][] = []
+    button.click()
+    const deadline = performance.now() + 2000
+    do {
+      await new Promise(requestAnimationFrame)
+      if (document.querySelector('.turn-leaf')) during.push(snapshot())
+    } while (performance.now() < deadline && (!during.length || document.querySelector('.turn-leaf')))
+    return { initial, during, final: snapshot() }
+  })
+  expect(frames.during.length).toBeGreaterThan(1)
+  expect([...frames.during, frames.final].every(frame => frame.every((value, index) => value === frames.initial[index]))).toBe(true)
+  await expect(pageControl(page)).toHaveValue('13')
+})
+
 test('exports a portable flipbook that opens and turns pages offline', async ({ page, context }, testInfo) => {
   await page.goto('/')
   await expect(sampleOpen(page)).toBeVisible()
