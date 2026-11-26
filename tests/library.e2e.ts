@@ -762,3 +762,27 @@ test('a stalled Smart Spirit replies promptly and can use a later result on the 
   await expect(bubble).toHaveText('Why did Eli put the saucepan on his head?')
   expect(await page.evaluate(() => sessionStorage.getItem('spirit-predictions'))).toBe('1')
 })
+
+test('the spirit answers when the PDF text stream never finishes', async ({ page }) => {
+  await page.addInitScript(() => {
+    const post = Worker.prototype.postMessage
+    Worker.prototype.postMessage = function (...args: [message: { action?: string }, transferOrOptions?: Transferable[] | StructuredSerializeOptions]) {
+      if (args[0]?.action === 'GetTextContent') {
+        sessionStorage.setItem('blocked-pdf-text', 'yes')
+        return
+      }
+      return Reflect.apply(post, this, args)
+    }
+  })
+  await page.goto('/')
+  await sampleOpen(page).click()
+  await expect(paper(page, 12)).toBeVisible()
+  const spirit = page.getByRole('complementary', { name: 'Reading companion' })
+  const tap = spirit.getByRole('button', { name: 'Hear from the book spirit' })
+  await expect(tap).toBeVisible()
+  await page.clock.install()
+  await tap.click()
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('blocked-pdf-text'))).toBe('yes')
+  await page.clock.fastForward(1850)
+  await expect(spirit.locator('.companion-bubble')).toHaveText('The words are a blur from here. I’ll keep you company.')
+})

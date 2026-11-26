@@ -10,10 +10,22 @@ import { expressions } from '../companion/inference'
 type Action = 'recap' | 'question' | 'bookmark' | 'connect'
 type Moment = { reactionId?: number; thinking?: boolean; page: number; mood: SpiritMood; kind?: BeatKind; line?: string; action?: Action }
 const speechCooldown = 72_000
-const modelReplyWait = 1800
+const replyBudget = 1800
+const textBudget = 850
 const modelExcerpt = (text: string) => text.trim().split(/\s+/).slice(0, 165).join(' ')
 const noticeTime = {
   doubt: 920, deception: 1120, surprise: 260, danger: 880, unease: 1380, humor: 450, grief: 1260, relief: 720, warmth: 800,
+}
+
+async function withinBudget<T>(request: Promise<T>, ms: number) {
+  let deadline: number | undefined
+  try {
+    return await Promise.race([
+      request,
+      new Promise<undefined>(resolve => { deadline = window.setTimeout(resolve, Math.max(0, ms)) }),
+    ])
+  } catch { return undefined }
+  finally { window.clearTimeout(deadline) }
 }
 
 export default function ReadingCompanion({ page, total, mode, available, reducedMotion, readPage, inset, bottom, bookmarked, saveBookmark }: {
@@ -137,7 +149,8 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
     const automatic = words !== undefined
     const interrupted = () => document.hidden || !!document.querySelector('dialog[open]') || (automatic && window.getSelection()?.type === 'Range')
     if (!visible || interrupted() || (automatic && (reactedPages.current.has(page) ||
-        Date.now() - latestTap.current < modelReplyWait + 1000))) return
+        Date.now() - latestTap.current < replyBudget + 1000))) return
+    const started = performance.now()
     if (!automatic) latestTap.current = Date.now()
     cancelReply()
     setPrompts(false)
@@ -147,10 +160,8 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
     const recent = previous && previous.page <= page && page - previous.page <= 2 ? previous.kind : undefined
     const turn = automatic ? 'automatic' : 'tap'
     const preferQuestion = action === 'question' || spokenTurns.current[turn] % 2 === (automatic ? 1 : 0)
-    let text = ''
-    try {
-      text = await readPage(page)
-    } catch { /* A scanned page can still have a bookmark or a quiet reply. */ }
+    // A rendered page can still have a slow or stalled PDF text stream.
+    const text = action === 'bookmark' ? '' : await withinBudget(readPage(page), textBudget) ?? ''
     if (token !== attempt.current || interrupted()) return
     const full = remember(text)
     const entry = words === undefined ? full : pageInsight(text.split(/\s+/).slice(0, words).join(' '))
@@ -163,12 +174,8 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
       const excerpt = modelExcerpt(text)
       const request = analyze(excerpt, page, recentLines.current)
       if (request) {
-        let deadline: number | undefined
         if (!automatic) setMoment({ page, mood: 'curious', thinking: true })
-        const prediction = await Promise.race([
-          request,
-          new Promise<undefined>(resolve => { deadline = window.setTimeout(resolve, modelReplyWait) }),
-        ]).finally(() => window.clearTimeout(deadline))
+        const prediction = await withinBudget(request, replyBudget - (performance.now() - started))
         if (token !== attempt.current) return
         if (interrupted()) { setMoment(undefined); return }
         if (prediction?.question && prediction.mood !== 'quiet' && !recentLines.current.includes(prediction.question)) {
