@@ -4,6 +4,8 @@ import { quietTapLine, reactionForPage, type BeatKind, type SpiritMood } from '.
 import { pageInsight, relatedPage, type PageInsight } from '../lib/readingInsights'
 import type { CompanionMode } from '../lib/model'
 import BookSpirit from './BookSpirit'
+import { useReadingModel } from '../companion/useReadingModel'
+import { expressions, type ReadingPrediction } from '../companion/inference'
 
 type Action = 'recap' | 'question' | 'bookmark' | 'connect'
 type Moment = { reactionId?: number; page: number; mood: SpiritMood; kind?: BeatKind; line?: string; action?: Action }
@@ -12,8 +14,9 @@ const noticeTime = {
   doubt: 920, deception: 1120, surprise: 260, danger: 880, unease: 1380, humor: 450, grief: 1260, relief: 720, warmth: 800,
 }
 
-export default function ReadingCompanion({ page, total, mode, available, reducedMotion, readPage, inset, bottom, bookmarked, saveBookmark }: {
+export default function ReadingCompanion({ page, otherPage, total, mode, available, reducedMotion, readPage, inset, bottom, bookmarked, saveBookmark }: {
   page: number
+  otherPage?: number
   total: number
   mode: CompanionMode
   available: boolean
@@ -45,6 +48,7 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
   const [prompts, setPrompts] = useState(false)
   const [insight, setInsight] = useState<PageInsight>()
   const visible = available && mode !== 'Off' && tabVisible
+  const { mood: storyMood, analyze } = useReadingModel({ available: visible, page, otherPage, readPage })
   const current = moment?.page === page ? moment : undefined
   const connection = insight && relatedPage(insight, page, memories.current)
 
@@ -136,7 +140,31 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
     const relatedLine = related && (related.chapter && related.chapter !== entry.chapter
       ? `We saw “${related.topic}” in chapter ${related.chapter}, on page ${related.page}. Does it feel different here?`
       : `Remember “${related.topic}” on page ${related.page}? Here it is again.`)
-    const reaction = reactionForPage(text, { words, seen: seenBeats.current, recent: action === 'question' ? [] : recentLines.current, previous: recent, preferQuestion })
+    let reaction = reactionForPage(text, { words, seen: seenBeats.current, recent: action === 'question' ? [] : recentLines.current, previous: recent, preferQuestion })
+    if (action === 'question' || (!action && !reaction)) {
+      const excerpt = words === undefined ? text.slice(0, 9600) : text.split(/\s+/).slice(0, words).join(' ')
+      const request = excerpt.trim() && analyze(excerpt, page, true)
+      let prediction: ReadingPrediction | undefined
+      if (request) {
+        if (automatic) prediction = await request
+        else {
+          // Keep taps responsive while the worker warms up. Its timeout never
+          // blocks the page or the existing on-demand reply.
+          let wait: number | undefined
+          prediction = await Promise.race([
+            request, new Promise<undefined>(resolve => { wait = window.setTimeout(resolve, 470) }),
+          ])
+          window.clearTimeout(wait)
+        }
+      }
+      if (token !== attempt.current || interrupted()) return
+      const highlight = prediction?.moment
+      if (highlight?.question && !recentLines.current.includes(highlight.question) &&
+          (!automatic || !seenBeats.current.has(highlight.stamp))) {
+        const [mood, kind] = expressions[highlight.mood]
+        reaction = { mood, kind, line: highlight.question, strength: 6, stamp: highlight.stamp }
+      }
+    }
     let expression: Moment = { page, mood: reaction?.mood ?? 'curious', kind: reaction?.kind }
     let line = reaction?.line
     if (action === 'bookmark') {
@@ -163,11 +191,6 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
         expression = { page, mood: 'encouraging', action: bookmarked ? undefined : 'bookmark' }
         line = page === total ? 'The last page. I’m glad we read this together.' : 'Halfway through. Look how far we’ve come!'
         if (!bookmarked) line += ' Shall I mark our place?'
-      } else if (relatedLine) {
-        line = relatedLine
-      } else if (entry.topic && words >= 245 && entry.recap) {
-        expression = { page, mood: 'curious', action: 'recap' }
-        line = `We’ve spent a little time with “${entry.topic}”. Want a quick recap?`
       } else return
     }
     if (reaction && !action) previousBeat.current = { page, kind: reaction.kind }
@@ -191,7 +214,7 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
     if (automatic && reaction) {
       animationTimers.current.push(window.setTimeout(showLine, noticeTime[reaction.kind] + (reaction.strength < 6 ? 180 : 0)))
     } else showLine()
-  }, [visible, page, total, readPage, cancel, remember, bookmarked, saveBookmark])
+  }, [visible, page, total, readPage, cancel, remember, bookmarked, saveBookmark, analyze])
 
   useEffect(() => {
     if (!visible || mode !== 'Occasional' || prompts) return
@@ -229,7 +252,7 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
       </div>}
     </div>
     <div className="spirit-perch">
-      <BookSpirit page={page} reactionId={current?.reactionId} mood={current?.mood ?? idle} beat={current?.kind} speaking={!!current?.line}
+      <BookSpirit page={page} reactionId={current?.reactionId} mood={current?.mood ?? (idle === 'sleepy' ? idle : storyMood ?? idle)} beat={current?.kind} speaking={!!current?.line}
         reducedMotion={reducedMotion} bubbleId={bubbleId} onTap={() => void perform()} />
       <button ref={sparkle} className="spirit-toggle" aria-label="Companion prompts" aria-controls={promptsId} aria-expanded={prompts}
         title="Companion prompts" onClick={togglePrompts}>{prompts ? <X size={15} /> : <Sparkles size={16} />}</button>

@@ -4,7 +4,7 @@ import {
   Focus, Highlighter, ListTree, Maximize, Minimize, Minus, Palette, PanelLeft, Plus, Search, SlidersHorizontal, StickyNote, Trash2, X,
 } from 'lucide-react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import { clampPage, adjacentPage } from '../lib/flip'
+import { clampPage, adjacentPage, spreadStart } from '../lib/flip'
 import { loadPdf, outline, pageText, type OutlineEntry, type PasswordRequest } from '../lib/pdf'
 import { readFile } from '../lib/storage'
 import { useLibrary } from '../lib/store'
@@ -402,7 +402,8 @@ export default function Reader({ book, file, close, password, toast }: { book: B
       {!firstPageSettled && !error && <div className="reader-loading-splash">
         <BookLoading message={loading > 0 && !pdf ? `Loading your book · ${loading}%` : 'Loading your book…'} reducedMotion={reduced} />
       </div>}
-      <ReadingCompanion page={page} total={total} bookmarked={!!marked} saveBookmark={saveBookmark} mode={preferences.companion}
+      <ReadingCompanion page={page} otherPage={spread && spreadStart(page, true) < total
+        ? (page % 2 === 0 ? page - 1 : page + 1) : undefined} total={total} bookmarked={!!marked} saveBookmark={saveBookmark} mode={preferences.companion}
         available={firstPageSettled && !error && !focus && !pane && !controls && !note && !showExport}
         reducedMotion={reduced} readPage={readPage} inset={Math.max(7, (size.width - width * leafCount) / 2 + 23)}
         bottom={scrolling ? 8 : Math.max(8, (size.height - height) / 2 + 5)} />

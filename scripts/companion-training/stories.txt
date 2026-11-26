@@ -1,0 +1,140 @@
+[quiet]
+The pantry shelves were arranged by height. The flour stood beside the rice.
+Elena took the usual train to work and sat in the second carriage.
+On Sundays the gardeners watered the plants before breakfast.
+The town lies north of the ridge, beside a broad shallow river.
+The radio listed the temperatures for the week ahead.
+A queue holds the positions of nodes whose neighbors are still unexplored.
+The chapter describes how plant cells store energy during the day.
+The blue room was warm. The curtains had faded in the sun.
+Mateo swept the floor, folded the towels, and put away the cups.
+The table gives the dates of the four meetings.
+Breadth-first search visits vertices in increasing distance from a starting vertex.
+The queue records discovered vertices while their neighbors remain unexplored.
+The next section contrasts a tree with a graph and gives a small example.
+A program can wait for a signal to indicate that a worker has finished.
+Describe how changing one connection affects the rest of the example.
+An in-order traversal of a binary search tree visits keys in sorted order.
+The sliding window advances when the acknowledgment reaches the sender.
+Once the resource is free, the process resumes execution from its saved state.
+The test produces a steady tone until the circuit is disconnected.
+The set of possible outcomes is finite and each outcome has an assigned weight.
+They had patched the fence every spring for a decade.
+The library opened at nine and closed again at six.
+[humor]
+Mara burst out laughing when Eli put the saucepan on his head.
+Leona tried to apologize to the scarecrow, then asked it for directions.
+The dog delivered the stick to the teacher and waited for a grade.
+He stifled a laugh when the solemn mayor's trousers slid to his ankles.
+Someone had taught the parrot to interrupt every toast with good riddance.
+I tried to look dignified, which was impossible with soup in my shoe.
+They giggled at the cat marching across the piano like a conductor.
+The king's sternest guard was discovered practicing his curtsy.
+Nina laughed so hard she had to sit on the stairs.
+For an expert thief, getting stuck in a laundry basket was a poor start.
+The judges nodded gravely at a pie labeled definitely not burnt.
+The whole table burst into laughter at the terrible pun.
+[joy]
+The crowd cheered as the team crossed the finish line.
+Celia could hardly stop smiling as her brother rushed into her arms.
+When the results came, they danced barefoot around the kitchen.
+Milo hugged his grandmother and couldn't wipe the smile off his face.
+The village bells rang and people spilled into the streets to celebrate.
+She grinned when the seedling finally pushed through the soil.
+Dev hugged the little dog, delighted to have her home.
+We had been waiting for a year, and here was our first good news.
+The children squealed with delight as the snow began to fall.
+Anya pulled Tessa into a hug, and for a moment everything felt right.
+At the harbor their father waved, and their faces lit up.
+Tonight they celebrated under a sky full of lanterns.
+[enthusiasm]
+I'm going to build it myself, Rowan declared, already reaching for the tools.
+Hana couldn't wait to tell them her plan for the expedition.
+The team spent all night sketching how their new invention might work.
+I have an idea, Ilya called, and ran to fetch the others.
+At dawn they raced down to the boat, eager to see the island.
+Rafi took a deep breath and pitched the wildest plan in his notebook.
+Tomorrow we ride, the captain shouted, and the riders roared back.
+With a map in hand, Sadie rattled off all the places she wanted to visit.
+Nothing could stop them now. They set out with a spring in their step.
+Pavel lit up at the prospect of making something nobody had tried.
+The audience leaned forward as Eva announced the ambitious new project.
+Let's see how far we can get before sunset, said Jules, eyes shining.
+[fear]
+Mara heard footsteps behind her in the dark and her heart pounded.
+Her blood ran cold as something scratched its way down the door.
+Jules froze, certain the figure in the alley could see him.
+A hand reached out of the black water and she screamed.
+Panic took hold when Oren realized the smoke had filled the room.
+Lena could barely breathe as the animal lunged from the trees.
+The creature sniffed at the tiny gap beneath the floorboards.
+His hands shook so much that he dropped the keys.
+She pressed herself against the wall, afraid to make a sound.
+Tomas backed away, terrified that the bridge would collapse.
+A sharp growl made the children cling to each other in the dark.
+The ladder cracked beneath Una, and she grabbed the ledge in terror.
+[sadness]
+Mara whispered goodbye one last time.
+She set a plate at the empty chair before remembering he was gone.
+No one spoke as they lowered the coffin into the earth.
+The letters returned unopened, and by winter she had stopped writing.
+Tears spilled onto the old photo before he could brush them away.
+Ola sat beside the unmade bed, missing her sister terribly.
+The worst part of losing him was waking up and remembering again.
+Mika wept as the boat carried her friend beyond the point.
+He laid flowers where they had once planted the apple tree.
+At supper they left the light on for someone who would never return.
+Sana said goodbye to the dog and stayed there until it was dark.
+The last voice message was all she had left.
+[suspense]
+On the other side of the locked door, someone slowly turned the handle.
+A letter lay beneath the floorboard, sealed with a crest he recognized.
+The elevator stopped halfway down and the lights went out.
+Rina watched the red light blink. There was only one minute left.
+He opened the ledger to the missing page and found a line of fresh ink.
+The key fit perfectly, but Mika hesitated before turning it.
+The signal came twice. A third chime would mean the guard had seen them.
+Whoever had left the note knew exactly where Nora slept.
+She followed the tracks until they stopped at the river's edge.
+They waited in silence. No one knew who would come through that door.
+The stranger leaned close. Before he could answer, the bell rang.
+The parcel began to tick just as Kai reached for it.
+[surprise]
+Mara gasped as the door flew open.
+He opened the box and found a live bird inside.
+The man at the table was supposed to be dead.
+Without warning, the floor gave way beneath them.
+The letter was signed by someone she had never met: herself.
+Everyone stared in disbelief when the statue blinked.
+The contest winner was the quiet child nobody had noticed.
+Sela gasped as the harmless old clock started speaking.
+A second moon emerged from behind the clouds.
+The old map showed their bedroom, down to the cracked window.
+To his surprise the heavy safe was empty.
+She turned the corner and there stood her brother, twenty years younger.
+[relief]
+Mara sighed with relief when she saw the garden gate.
+It was only the cat. The family left the cellar and went back upstairs.
+The child coughed and took a breath. Only then did Luca unclench his fists.
+At last the doctor came out and told them she would recover.
+They were finally safe on the far bank, well beyond the flood.
+I let out a breath when the distant headlights finally turned away.
+He loosened his grip as the lifeboat reached the shore.
+The alarm fell silent when the technician disconnected the faulty switch.
+Thank goodness, the crossing was open again.
+Chloe's shoulders relaxed when the rescue crew waved from the ridge.
+The worst was over; the town had made it through the storm.
+The lost little boy ran straight into his father's arms.
+[character]
+A woman named Selene introduced herself as their new guide.
+The ferry passenger stepped ashore. His name was Niko, and he came alone.
+They had never met Imogen before. She promised to help them through the pass.
+A newcomer called Ada pulled up a chair and asked to join the game.
+The host introduced Emil, the musician everyone had been expecting.
+Corin, a courier from the capital, arrived just as dinner ended.
+A stranger named Leila appeared at the gate with a heavy suitcase.
+The new apprentice was called Jesse and had never been to a city.
+The party was joined by a traveler called Soren.
+There was a new face in the room. He introduced himself as Arlo.
+A girl called Noor turned up at breakfast asking for work.
+Their new neighbor, Bea, knocked on the door that afternoon.

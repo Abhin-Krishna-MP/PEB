@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { cpSync } from 'node:fs'
 
 export default defineConfig({
+  worker: { format: 'es' },
   plugins: [
     react(), tailwind(),
     {
@@ -29,7 +30,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,mjs,css,html,png,svg,webp,jpg,gif,pdf,woff2,bcmap,ttf,pfb,wasm,icc}'],
+        globPatterns: ['**/*.{js,mjs,css,html,png,svg,webp,jpg,gif,pdf,woff2,bcmap,ttf,pfb,wasm,icc,onnx}'],
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,

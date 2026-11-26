@@ -29,6 +29,14 @@ After the first production visit, allow the service worker to finish caching bef
 - Use the book menu to rename, move, or delete documents. The heart toggles favorites. Collections are created from the sidebar or Collections screen. Settings reports browser storage usage and can request that the browser retain local data. Browser settings, private mode, quotas, and changes to the app's origin can affect access to a local library.
 - Choose **Export HTML flipbook** in Reader options to download a single file that opens offline in a browser. The export embeds rendered page images with navigation. Searchable text, bookmarks, and personal notes stay in Folio. Exports from password-protected PDFs contain unencrypted page images.
 
+## Reading companion
+
+Folio analyzes selectable English PDF text with two small neural networks trained from random weights. The first scores narrative mood and story events. The second generates short questions token by token, with a limited vocabulary and an optional character name drawn from the page. The companion carries a little of the previous page's mood forward. In **Occasional** mode it can ask about a salient scene after a reading pause. **On tap** limits speech to requests, and **Off** disables the companion.
+
+Both ONNX models use 8-bit weights and run in a Web Worker. The models, worker, and WebAssembly runtime are precached with the app. Inference and session memory stay on the device. Image-only PDFs need a selectable text layer for story reactions.
+
+Training data, scripts, and validation limits are documented in [Companion training](scripts/companion-training/README.md).
+
 ## Architecture
 
 | Location | Responsibility |
