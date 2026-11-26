@@ -5,18 +5,17 @@ import { pageInsight, relatedPage, type PageInsight } from '../lib/readingInsigh
 import type { CompanionMode } from '../lib/model'
 import BookSpirit from './BookSpirit'
 import { useReadingModel } from '../companion/useReadingModel'
-import { expressions, type ReadingPrediction } from '../companion/inference'
+import { expressions } from '../companion/inference'
 
 type Action = 'recap' | 'question' | 'bookmark' | 'connect'
-type Moment = { reactionId?: number; page: number; mood: SpiritMood; kind?: BeatKind; line?: string; action?: Action }
+type Moment = { reactionId?: number; thinking?: boolean; page: number; mood: SpiritMood; kind?: BeatKind; line?: string; action?: Action }
 const speechCooldown = 72_000
 const noticeTime = {
   doubt: 920, deception: 1120, surprise: 260, danger: 880, unease: 1380, humor: 450, grief: 1260, relief: 720, warmth: 800,
 }
 
-export default function ReadingCompanion({ page, otherPage, total, mode, available, reducedMotion, readPage, inset, bottom, bookmarked, saveBookmark }: {
+export default function ReadingCompanion({ page, total, mode, available, reducedMotion, readPage, inset, bottom, bookmarked, saveBookmark }: {
   page: number
-  otherPage?: number
   total: number
   mode: CompanionMode
   available: boolean
@@ -48,7 +47,7 @@ export default function ReadingCompanion({ page, otherPage, total, mode, availab
   const [prompts, setPrompts] = useState(false)
   const [insight, setInsight] = useState<PageInsight>()
   const visible = available && mode !== 'Off' && tabVisible
-  const { mood: storyMood, analyze } = useReadingModel({ available: visible, page, otherPage, readPage })
+  const { mood: storyMood, analyze, enabled, cancel: cancelModel, rememberNames } = useReadingModel(visible, page)
   const current = moment?.page === page ? moment : undefined
   const connection = insight && relatedPage(insight, page, memories.current)
 
@@ -60,11 +59,13 @@ export default function ReadingCompanion({ page, otherPage, total, mode, availab
 
   const cancel = useCallback(() => {
     attempt.current++
+    cancelModel()
     for (const timer of animationTimers.current) window.clearTimeout(timer)
     animationTimers.current = []
-  }, [])
+  }, [cancelModel])
 
   const remember = useCallback((text: string) => {
+    rememberNames(text, page)
     const memory = memories.current
     const entry = memory.get(page) ?? pageInsight(text)
     if (entry.terms.length) {
@@ -73,7 +74,7 @@ export default function ReadingCompanion({ page, otherPage, total, mode, availab
     }
     setInsight(entry)
     return entry
-  }, [page])
+  }, [page, rememberNames])
 
   useEffect(() => {
     setMoment(undefined)
@@ -141,28 +142,19 @@ export default function ReadingCompanion({ page, otherPage, total, mode, availab
       ? `We saw “${related.topic}” in chapter ${related.chapter}, on page ${related.page}. Does it feel different here?`
       : `Remember “${related.topic}” on page ${related.page}? Here it is again.`)
     let reaction = reactionForPage(text, { words, seen: seenBeats.current, recent: action === 'question' ? [] : recentLines.current, previous: recent, preferQuestion })
-    if (action === 'question' || (!action && !reaction)) {
-      const excerpt = words === undefined ? text.slice(0, 9600) : text.split(/\s+/).slice(0, words).join(' ')
-      const request = excerpt.trim() && analyze(excerpt, page, true)
-      let prediction: ReadingPrediction | undefined
-      if (request) {
-        if (automatic) prediction = await request
-        else {
-          // Keep taps responsive while the worker warms up. Its timeout never
-          // blocks the page or the existing on-demand reply.
-          let wait: number | undefined
-          prediction = await Promise.race([
-            request, new Promise<undefined>(resolve => { wait = window.setTimeout(resolve, 470) }),
-          ])
-          window.clearTimeout(wait)
+    if (enabled && (action === 'question' || !action)) {
+      const excerpt = text.trim().split(/\s+/).slice(0, words === 115 ? 165 : 260).join(' ')
+      if (excerpt) {
+        if (!automatic) setMoment({ page, mood: 'curious', thinking: true })
+        const prediction = await analyze(excerpt, page, recentLines.current)
+        if (token !== attempt.current || interrupted()) return
+        if (prediction?.question && prediction.mood !== 'quiet') {
+          const stamp = reaction?.stamp ?? excerpt.toLowerCase().slice(0, 180)
+          if ((!automatic || !seenBeats.current.has(stamp)) && (preferQuestion || !reaction)) {
+            const [mood, kind] = expressions[prediction.mood]
+            reaction = { mood, kind, line: prediction.question, strength: 6, stamp }
+          }
         }
-      }
-      if (token !== attempt.current || interrupted()) return
-      const highlight = prediction?.moment
-      if (highlight?.question && !recentLines.current.includes(highlight.question) &&
-          (!automatic || !seenBeats.current.has(highlight.stamp))) {
-        const [mood, kind] = expressions[highlight.mood]
-        reaction = { mood, kind, line: highlight.question, strength: 6, stamp: highlight.stamp }
       }
     }
     let expression: Moment = { page, mood: reaction?.mood ?? 'curious', kind: reaction?.kind }
@@ -214,7 +206,7 @@ export default function ReadingCompanion({ page, otherPage, total, mode, availab
     if (automatic && reaction) {
       animationTimers.current.push(window.setTimeout(showLine, noticeTime[reaction.kind] + (reaction.strength < 6 ? 180 : 0)))
     } else showLine()
-  }, [visible, page, total, readPage, cancel, remember, bookmarked, saveBookmark, analyze])
+  }, [visible, page, total, readPage, cancel, remember, bookmarked, saveBookmark, analyze, enabled])
 
   useEffect(() => {
     if (!visible || mode !== 'Occasional' || prompts) return
@@ -246,6 +238,7 @@ export default function ReadingCompanion({ page, otherPage, total, mode, availab
       if (event.key === 'Escape' && (current || prompts)) { event.stopPropagation(); dismiss(); sparkle.current?.focus() }
     }}>
     <div id={bubbleId} className="companion-voice" role="status" aria-atomic="true">
+      {current?.thinking && <span className="spirit-thinking">Thinking…</span>}
       {current?.line && <div className="spirit-speech">
         <button className="companion-bubble" title="Dismiss reaction" onClick={dismiss}>{current.line}</button>
         {current.action && <button className="spirit-answer" onClick={() => void perform(undefined, current.action)}>{current.action === 'bookmark' ? 'Bookmark page' : 'Quick recap'}</button>}

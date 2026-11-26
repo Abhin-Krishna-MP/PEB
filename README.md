@@ -31,11 +31,11 @@ After the first production visit, allow the service worker to finish caching bef
 
 ## Reading companion
 
-Folio analyzes selectable English PDF text with two small neural networks trained from random weights. The first scores narrative mood and story events. The second generates short questions token by token, with a limited vocabulary and an optional character name drawn from the page. The companion carries a little of the previous page's mood forward. In **Occasional** mode it can ask about a salient scene after a reading pause. **On tap** limits speech to requests, and **Off** disables the companion.
+Folio uses the rule-based spirit by default. To enable local generation, open **Settings → Offline Smart Spirit → Download & enable** while online. Folio stores the model in browser Cache Storage. Use **Remove download** to free that space.
 
-Both ONNX models use 8-bit weights and run in a Web Worker. The models, worker, and WebAssembly runtime are precached with the app. Inference and session memory stay on the device. Image-only PDFs need a selectable text layer for story reactions.
+Smart Spirit uses Transformers.js with `onnx-community/gemma-3-270m-it-ONNX` in Q4. It probes WebGPU and can use single-threaded WebAssembly. The first download contacts Hugging Face for model files. Inference reads the model from Cache Storage and keeps page text on the device. Workbox precaches the worker and the local ONNX Runtime files. The model weights are downloaded separately after opt-in.
 
-Training data, scripts, and validation limits are documented in [Companion training](scripts/companion-training/README.md).
+If Gemma reports unsupported model operators during setup, Folio can try `HuggingFaceTB/SmolLM2-360M-Instruct` in Q4. If model storage, loading or generation fails, the rule-based spirit is available. Image-only PDFs need a selectable text layer for story reactions.
 
 ## Architecture
 

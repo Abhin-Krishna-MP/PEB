@@ -826,3 +826,9 @@ dialog::backdrop { background: #07090bd1; }
   .companion-voice { max-width: min(192px, 100%); }
   .companion-bubble { font-size: 13px; padding: 9px 12px; }
 }
+
+.smart-spirit-setting { align-items: center; flex-wrap: wrap; gap: .65rem; }
+.smart-spirit-setting p { margin: .24rem 0; color: var(--muted); font-size: .8rem; }
+.smart-spirit-setting progress { width: 100%; accent-color: var(--gold); }
+.smart-spirit-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.spirit-thinking { color: var(--muted); font-size: .75rem; }

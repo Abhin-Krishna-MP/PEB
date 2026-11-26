@@ -1,38 +1,76 @@
-import type { InferenceRequest, InferenceResponse, ReadingPrediction } from './inference'
+import type { InferenceRequest, InferenceResponse, ModelDownload, ModelId, ReadingExcerpt, ReadingPrediction } from './inference'
 
-export function openReadingModel() {
-  let worker: Worker
-  try {
-    worker = new Worker(new URL('./inference.worker.ts', import.meta.url), { type: 'module' })
-  } catch { return }
-  let id = 0
+type Pending = { message: (event: InferenceResponse) => void; fail: (error: Error) => void }
+
+export function openReadingModel(createWorker = () => new Worker(new URL('./inference.worker.ts', import.meta.url), { type: 'module' })) {
+  const worker = createWorker()
+  const pending = new Map<number, Pending>()
+  let nextId = 0
   let closed = false
-  const pending = new Map<number, (prediction?: ReadingPrediction) => void>()
+
   function close() {
     if (closed) return
     closed = true
     worker.terminate()
-    pending.forEach(resolve => resolve())
-    pending.clear()
+    pending.forEach(request => request.fail(new Error('The model worker closed.')))
   }
+
   worker.onerror = close
   worker.onmessageerror = close
-  worker.onmessage = ({ data }: MessageEvent<InferenceResponse>) => pending.get(data.id)?.(data.result)
+  worker.onmessage = ({ data }: MessageEvent<InferenceResponse>) => pending.get(data.id)?.message(data)
 
   return {
     close,
-    predict(request: Omit<InferenceRequest, 'id'>) {
-      return new Promise<ReadingPrediction | undefined>(resolve => {
-        if (closed) { resolve(undefined); return }
-        const requestId = ++id
-        const finish = (value?: ReadingPrediction) => {
-          window.clearTimeout(timeout)
-          pending.delete(requestId)
-          resolve(value)
+    download(onProgress: (loaded: number, total: number) => void) {
+      return new Promise<ModelDownload>((resolve, reject) => {
+        if (closed) { reject(new Error('The model worker closed.')); return }
+        const id = ++nextId
+        let timer: ReturnType<typeof setTimeout>
+        const clear = () => { clearTimeout(timer); pending.delete(id) }
+        const fail = (error: Error) => { clear(); reject(error) }
+        const watch = () => {
+          clearTimeout(timer)
+          timer = setTimeout(() => { fail(new Error('Model download timed out. Check the connection and retry.')); close() }, 120_000)
         }
-        const timeout = window.setTimeout(finish, 4500)
-        pending.set(requestId, finish)
-        try { worker.postMessage({ ...request, id: requestId }) }
+        watch()
+        pending.set(id, {
+          fail,
+          message(event) {
+            if (event.type === 'progress') { watch(); onProgress(event.loaded, event.total) }
+            if (event.type === 'downloaded') { clear(); resolve(event.download) }
+            if (event.type === 'error') fail(new Error(event.error))
+          },
+        })
+        try { worker.postMessage({ id, type: 'download' } satisfies InferenceRequest) }
+        catch (error) { fail(error instanceof Error ? error : new Error('Could not start download.')) }
+      })
+    },
+    predict(model: ModelId, excerpt: ReadingExcerpt, signal: AbortSignal) {
+      return new Promise<{ result?: ReadingPrediction; unavailable?: boolean }>(resolve => {
+        if (closed || signal.aborted) { resolve({}); return }
+        const id = ++nextId
+        let timer: ReturnType<typeof setTimeout>
+        function finish(result?: ReadingPrediction, unavailable?: boolean) {
+          clearTimeout(timer)
+          signal.removeEventListener('abort', cancel)
+          pending.delete(id)
+          resolve({ result, unavailable })
+        }
+        function cancel() {
+          if (!closed) worker.postMessage({ id, type: 'cancel' } satisfies InferenceRequest)
+          finish()
+        }
+        timer = setTimeout(cancel, 120_000)
+        signal.addEventListener('abort', cancel, { once: true })
+        pending.set(id, {
+          fail: () => finish(),
+          message(event) {
+            if (event.type === 'started') { clearTimeout(timer); timer = setTimeout(cancel, 25_000) }
+            if (event.type === 'result') finish(event.result)
+            if (event.type === 'error') finish(undefined, event.unavailable)
+          },
+        })
+        try { worker.postMessage({ id, type: 'predict', model, excerpt } satisfies InferenceRequest) }
         catch { finish() }
       })
     },

@@ -623,36 +623,90 @@ test('the spirit looks up, follows a page turn, and rests with reduced motion', 
   await expect(figure).toHaveAttribute('data-gesture', 'read')
 })
 
-test('the companion runs both ONNX models offline in the reader worker', async ({ page, context }) => {
+test('the companion uses offline rules before downloading Smart Spirit', async ({ page, context }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await expect(sampleOpen(page)).toBeVisible()
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.state)).toBe('activated')
   await context.setOffline(true)
-  await page.clock.install()
-  const assets = new Set<string>()
-  context.on('response', response => {
-    if (response.ok()) assets.add(new URL(response.url()).pathname)
-  })
+  const requests: string[] = []
+  context.on('request', request => requests.push(request.url()))
   const story = await PDFDocument.create()
-  for (const line of ['The node queue stores vertices whose neighbors remain unexplored.', 'A woman named Selene introduced herself as their new guide.']) {
-    story.addPage([455, 550]).drawText(line, { x: 25, y: 500 })
-  }
-  await filePicker(page).setInputFiles({ name: 'Selene.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await story.save()) })
+  story.addPage([455, 550]).drawText('Mara burst out laughing when Eli put the saucepan on his head.', { x: 25, y: 500 })
+  await filePicker(page).setInputFiles({ name: 'Story.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await story.save()) })
   await expect(paper(page, 1)).toBeVisible()
   const spirit = page.getByRole('complementary', { name: 'Reading companion' })
-  const sprite = spirit.locator('.companion-sprite')
-  const bubble = spirit.locator('.companion-bubble')
-  await page.clock.fastForward(80_000)
-  await expect(bubble).toHaveCount(0)
-  await pageControl(page).fill('2')
-  await pageControl(page).press('Enter')
-  await expect(paper(page, 2)).toBeVisible()
-  await expect(sprite).toHaveAttribute('data-mood', 'curious')
-  await expect(bubble).toHaveCount(0)
-  await page.clock.fastForward(35_000)
-  await expect.poll(() => [...assets].some(path => /questions-.*\.onnx$/.test(path))).toBe(true)
-  await page.clock.fastForward(1500)
-  await expect(bubble).toHaveText('What do you think Selene wants?')
-  expect([...assets].some(path => /emotion-.*\.onnx$/.test(path))).toBe(true)
+  await spirit.getByRole('button', { name: 'Hear from the book spirit' }).click()
+  await expect(spirit.locator('.companion-bubble')).toHaveText(/straight face|got me|laugh out loud/)
+  expect(requests.some(url => /huggingface|spirit-runtime|inference\.worker|\.onnx(?:$|\?)/.test(url))).toBe(false)
+})
+
+test('Smart Spirit reports progress, retains its cache offline, and supports removal and retry', async ({ page, context }) => {
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker
+    let attempts = 0
+    window.Worker = new Proxy(NativeWorker, {
+      construct(target, args) {
+        if (!String(args[0]).includes('inference.worker')) return Reflect.construct(target, args)
+        const worker = {
+          onmessage: (_event: MessageEvent) => {},
+          terminate() {},
+          async postMessage({ id, type }: { id: number; type: string }) {
+            if (type !== 'download') return
+            if (++attempts === 1 && !sessionStorage.getItem('failed')) {
+              sessionStorage.setItem('failed', 'yes')
+              worker.onmessage(new MessageEvent('message', { data: { id, type: 'error', error: 'Connection interrupted' } }))
+              return
+            }
+            worker.onmessage(new MessageEvent('message', { data: { id, type: 'progress', loaded: 40, total: 100 } }))
+            const model = 'onnx-community/gemma-3-270m-it-ONNX'
+            await new Promise(resolve => setTimeout(resolve, 450))
+            const file = 'https://huggingface.co/' + model + '/resolve/main/onnx/model_q4.onnx'
+            await (await caches.open('transformers-cache')).put(file, new Response('test cache entry'))
+            worker.onmessage(new MessageEvent('message', { data: { id, type: 'downloaded', download: { model, files: [file], bytes: 100 } } }))
+          },
+        }
+        return worker
+      },
+    })
+  })
+  await page.goto('/')
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.state)).toBe('activated')
+  await page.getByRole('button', { name: 'Settings', exact: true }).first().click()
+  await expect(page.getByText('Off · Rule-based companion')).toBeVisible()
+  await page.getByRole('button', { name: 'Download & enable' }).click()
+  await expect(page.getByText('Failed · Connection interrupted')).toBeVisible()
+  await page.getByRole('button', { name: 'Retry download' }).click()
+  await expect(page.getByText('Downloading 40%')).toBeVisible()
+  await expect(page.getByText(/Ready offline/)).toBeVisible()
+  await context.setOffline(true)
+  await page.reload()
+  await page.getByRole('button', { name: 'Settings', exact: true }).first().click()
+  await expect(page.getByText(/Ready offline/)).toBeVisible()
+  await page.getByRole('button', { name: 'Remove download' }).click()
+  await expect(page.getByText('Off · Rule-based companion')).toBeVisible()
+  expect(await page.evaluate(async () => (await (await caches.open('transformers-cache')).keys()).length)).toBe(0)
+  await page.reload()
+  await page.getByRole('button', { name: 'Settings', exact: true }).first().click()
+  await expect(page.getByText('Off · Rule-based companion')).toBeVisible()
+})
+
+test('Workbox caches all local Smart Spirit runtime files and excludes model weights', async ({ page, context }) => {
+  await page.goto('/')
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.state)).toBe('activated')
+  await context.setOffline(true)
+  const files = await page.evaluate(async () => {
+    const names = (await caches.keys()).filter(name => name.includes('workbox-precache'))
+    const urls = (await Promise.all(names.map(async name => (await (await caches.open(name)).keys()).map(key => key.url)))).flat()
+    return [...new Set(urls.map(url => new URL(url).pathname))]
+  })
+  const runtime = files.filter(file => file.startsWith('/spirit-runtime/') || file.includes('/ort-wasm-'))
+  expect(runtime).toHaveLength(4)
+  expect(files.some(file => /\.onnx(?:$|_)/.test(file))).toBe(false)
+  const offline = await page.evaluate(async runtime => Promise.all(runtime.map(async file => {
+    const response = await fetch(file)
+    void response.body?.cancel().catch(() => undefined)
+    return response.ok
+  })), runtime)
+  expect(offline).toEqual([true, true, true, true])
 })
