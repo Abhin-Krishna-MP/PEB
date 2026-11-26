@@ -34,6 +34,7 @@ export type Preferences = {
   theme: Theme
   appearance: 'Dark' | 'Light' | 'System'
   mode: Mode
+  tiltTurns: boolean
   animation: boolean
   companion: CompanionMode
   reducedMotion: boolean
@@ -41,7 +42,7 @@ export type Preferences = {
   fit: Fit
 }
 export const defaults: Preferences = {
-  libraryLayout: 'grid', theme: 'Original', appearance: 'Dark', mode: 'Auto', animation: true, companion: 'Occasional', reducedMotion: false, zoom: 100, fit: 'Fit page',
+  libraryLayout: 'grid', theme: 'Original', appearance: 'Dark', mode: 'Auto', tiltTurns: false, animation: true, companion: 'Occasional', reducedMotion: false, zoom: 100, fit: 'Fit page',
 }
 export const progress = (book: Book) => book.openedAt ? Math.round(book.page / Math.max(1, book.pages) * 100) : 0
 export function fileSize(bytes: number) {

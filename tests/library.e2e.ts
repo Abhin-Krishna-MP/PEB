@@ -622,3 +622,55 @@ test('the spirit looks up, follows a page turn, and rests with reduced motion', 
   await expect(page.locator('.companion-bubble')).toBeVisible()
   await expect(figure).toHaveAttribute('data-gesture', 'read')
 })
+
+test.describe('phone tilt page turns', () => {
+  test.use({ hasTouch: true, isMobile: true, screen: { width: 390, height: 844 }, viewport: { width: 390, height: 844 } })
+
+  test('requires opt-in and permission, curls both ways, and remembers when turned off', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(DeviceMotionEvent, 'requestPermission', {
+        value: () => Promise.resolve(sessionStorage.getItem('motion-grant') ?? 'denied'),
+      })
+    })
+    await page.goto('/')
+    await sampleOpen(page).click()
+    await expect(paper(page, 12)).toBeVisible()
+    const options = page.getByRole('button', { name: 'Reader options', exact: true })
+    const closeOptions = page.getByRole('button', { name: 'Close reader options', exact: true })
+    const toggle = page.getByLabel('Turn pages by tilting')
+    const flick = async (rate: number) => page.evaluate(async rate => {
+      for (const gamma of [...Array(12).fill(0), ...Array(9).fill(rate), ...Array(9).fill(-rate)]) {
+        const event = new DeviceMotionEvent('devicemotion', { rotationRate: { alpha: 0, beta: 0, gamma } })
+        window.dispatchEvent(event)
+        await new Promise(resolve => window.setTimeout(resolve, 20))
+      }
+    }, rate)
+
+    await options.click()
+    await expect(toggle).not.toBeChecked()
+    await toggle.click()
+    await expect(page.getByText(/allow motion access in your browser/)).toBeVisible()
+    await expect(toggle).not.toBeChecked()
+    await page.evaluate(() => sessionStorage.setItem('motion-grant', 'granted'))
+    await toggle.click()
+    await expect(toggle).toBeChecked()
+    await flick(-90)
+    await expect(page.locator('.turn-leaf')).toHaveCount(0)
+    await closeOptions.click()
+    await flick(-90)
+    await expect(page.locator('.turn-leaf')).toBeVisible()
+    await expect(pageControl(page)).toHaveValue('13')
+    await page.reload()
+    await expect(paper(page, 13)).toBeVisible()
+    await flick(90)
+    await expect(pageControl(page)).toHaveValue('12')
+    await options.click()
+    await toggle.uncheck()
+    await closeOptions.click()
+    await flick(-90)
+    await expect(page.locator('.turn-leaf')).toHaveCount(0)
+    await page.reload()
+    await options.click()
+    await expect(toggle).not.toBeChecked()
+  })
+})

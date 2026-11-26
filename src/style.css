@@ -240,7 +240,9 @@ dialog::backdrop { background: #07090bd1; }
 .reader-actions, .zoom-tools, .pagination { display: flex; align-items: center; gap: 4px; }
 .reader-actions, .zoom-tools { justify-self: end; }
 .reader-options { position: relative; }
-.options-popup { width: 232px; }
+.options-popup { width: 232px; max-height: calc(100dvh - 65px); overflow-y: auto; }
+.tilt-option p { margin: 0 8px 6px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+.tilt-option input { accent-color: var(--gold); }
 .options-popup label { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 8px; font-size: 12px; color: var(--muted); }
 .options-popup label select { padding: 5px 4px; }
 .reader-body { min-height: 0; display: flex; flex: 1; position: relative; }

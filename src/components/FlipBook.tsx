@@ -73,6 +73,7 @@ export default function FlipBook({ pdf, page, change, registerNavigation, width,
   }
 
   function navigate(direction: -1 | 1) {
+    if (track.current || touches.current.size || panTrack.current) return
     const target = adjacentPage(page, direction, spread, pdf.numPages)
     if (target !== page) settle(target, direction, true)
   }
