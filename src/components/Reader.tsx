@@ -13,7 +13,6 @@ import { BookLoading, Modal } from './Common'
 import FlipBook from './FlipBook'
 import PdfPage, { clearPageRasters } from './PdfPage'
 import ReadingCompanion from './ReadingCompanion'
-import { useTiltTurns } from './useTiltTurns'
 
 type Pane = 'pages' | 'outline' | 'search' | 'notes' | 'theme'
 type SearchResult = { page: number; text: string }
@@ -217,12 +216,6 @@ export default function Reader({ book, file, close, password, toast }: { book: B
     if (!scrolling && navigation.current) navigation.current(direction)
     else jump(adjacentPage(page, direction, false, total))
   }
-  const tilt = useTiltTurns(preferences.tiltTurns, firstPageSettled && !error && !pane && !controls && !note && !showExport, turn, controls)
-  async function setTiltTurns(enabled: boolean) {
-    if (enabled && !await tilt.allow()) return
-    try { await configure({ tiltTurns: enabled }) }
-    catch { toast('Could not save the tilt preference.') }
-  }
   useEffect(() => {
     function key(event: KeyboardEvent) {
       if (document.querySelector('dialog[open]') || (event.target instanceof HTMLElement && /INPUT|SELECT|TEXTAREA/.test(event.target.tagName))) return
@@ -338,18 +331,6 @@ export default function Reader({ book, file, close, password, toast }: { book: B
             <label>Reading companion<select value={preferences.companion} onChange={event => {
               void configure({ companion: event.target.value as CompanionMode }).catch(() => toast('Could not save the companion preference.'))
             }}>{companionModes.map(value => <option key={value}>{value}</option>)}</select></label>
-            {tilt.mobile && <div className="tilt-option">
-              <label>Turn pages by tilting<input type="checkbox" aria-describedby="tilt-hint" checked={preferences.tiltTurns}
-                disabled={tilt.requesting || (!tilt.supported && !preferences.tiltTurns)} onChange={event => void setTiltTurns(event.target.checked)} /></label>
-              <p id="tilt-hint" role="status">{!window.isSecureContext ? 'Open Folio over HTTPS to use motion sensors.' :
-                !tilt.supported ? 'Motion sensors are unavailable in this browser.' : tilt.permissionHint ||
-                (!preferences.tiltTurns ? 'Tilt left for the next page or right to go back.' :
-                 tilt.status === 'missing' ? 'No motion readings. In Chrome, check Settings → Site settings → Motion sensors, then retry.' :
-                 tilt.status === 'waiting' ? 'Waiting for motion readings…' :
-                 tilt.detected ? `${tilt.detected === 1 ? 'Left' : 'Right'} tilt detected. Close Reader options to turn pages.` :
-                 'Sensor ready. Tilt left or right to test here, or close Reader options to read.')}</p>
-              {tilt.supported && preferences.tiltTurns && tilt.status === 'missing' && <button disabled={tilt.requesting} onClick={() => void tilt.allow()}>Retry motion access</button>}
-            </div>}
             <button onClick={() => togglePane('outline')}><ListTree size={17} /> Table of contents</button>
             <button onMouseDown={event => event.preventDefault()} onClick={() => { highlight(); setControls(false) }}><Highlighter size={17} /> Highlight selection</button>
             <button onClick={() => { setFocus(true); setControls(false); setPane(undefined) }}><Focus size={17} /> Distraction-free mode</button>
