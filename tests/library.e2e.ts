@@ -710,3 +710,55 @@ test('Workbox caches all local Smart Spirit runtime files and excludes model wei
   })), runtime)
   expect(offline).toEqual([true, true, true, true])
 })
+
+test('a stalled Smart Spirit replies promptly and can use a later result on the same page', async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker
+    window.Worker = new Proxy(NativeWorker, {
+      construct(target, args) {
+        if (!String(args[0]).includes('inference.worker')) return Reflect.construct(target, args)
+        const worker = {
+          onmessage: (_event: MessageEvent) => {},
+          terminate() {},
+          postMessage({ id, type }: { id: number; type: string }) {
+            if (type !== 'predict') return
+            sessionStorage.setItem('spirit-predictions', String(Number(sessionStorage.getItem('spirit-predictions')) + 1))
+            window.addEventListener('complete-spirit-test', () => {
+              worker.onmessage(new MessageEvent('message', { data: { id, type: 'result', result: {
+                mood: 'humor', question: 'Why did Eli put the saucepan on his head?',
+              } } }))
+            }, { once: true })
+          },
+        }
+        return worker
+      },
+    })
+  })
+  await page.goto('/')
+  await expect(sampleOpen(page)).toBeVisible()
+  await page.evaluate(async () => {
+    const model = 'onnx-community/gemma-3-270m-it-ONNX'
+    const file = 'https://huggingface.co/' + model + '/resolve/main/onnx/model_q4.onnx'
+    await (await caches.open('transformers-cache')).put(file, new Response('test cache entry'))
+    localStorage.setItem('folio:offline-smart-spirit:q4:v1', JSON.stringify({ kind: 'ready', download: { model, files: [file] } }))
+  })
+  await page.reload()
+  await page.clock.install()
+  const story = await PDFDocument.create()
+  story.addPage([455, 550]).drawText('Mara burst out laughing when Eli put the saucepan on his head.', { x: 25, y: 500 })
+  await filePicker(page).setInputFiles({ name: 'Story.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await story.save()) })
+  await expect(paper(page, 1)).toBeVisible()
+  const spirit = page.getByRole('complementary', { name: 'Reading companion' })
+  const bubble = spirit.locator('.companion-bubble')
+  await spirit.getByRole('button', { name: 'Hear from the book spirit' }).click()
+  await expect(spirit.getByText('Thinking…')).toBeVisible()
+  await page.clock.fastForward(2000)
+  await expect(bubble).toHaveText(/straight face|got me|laugh out loud/)
+  await expect(spirit.getByText('Thinking…')).toHaveCount(0)
+  await page.evaluate(() => window.dispatchEvent(new Event('complete-spirit-test')))
+  await expect(bubble).not.toHaveText('Why did Eli put the saucepan on his head?')
+  await spirit.getByRole('button', { name: 'Companion prompts' }).click()
+  await spirit.getByRole('button', { name: 'Ask me a question' }).click()
+  await expect(bubble).toHaveText('Why did Eli put the saucepan on his head?')
+  expect(await page.evaluate(() => sessionStorage.getItem('spirit-predictions'))).toBe('1')
+})

@@ -46,26 +46,34 @@ export function openReadingModel(createWorker = () => new Worker(new URL('./infe
       })
     },
     predict(model: ModelId, excerpt: ReadingExcerpt, signal: AbortSignal) {
-      return new Promise<{ result?: ReadingPrediction; unavailable?: boolean }>(resolve => {
+      return new Promise<{ result?: ReadingPrediction; unavailable?: boolean; timedOut?: boolean }>(resolve => {
         if (closed || signal.aborted) { resolve({}); return }
         const id = ++nextId
         let timer: ReturnType<typeof setTimeout>
-        function finish(result?: ReadingPrediction, unavailable?: boolean) {
+        function finish(result?: ReadingPrediction, unavailable?: boolean, timedOut?: boolean) {
           clearTimeout(timer)
           signal.removeEventListener('abort', cancel)
           pending.delete(id)
-          resolve({ result, unavailable })
+          resolve({ result, unavailable, timedOut })
         }
         function cancel() {
-          if (!closed) worker.postMessage({ id, type: 'cancel' } satisfies InferenceRequest)
           finish()
+          if (!closed) {
+            try { worker.postMessage({ id, type: 'cancel' } satisfies InferenceRequest) }
+            catch { close() }
+          }
         }
-        timer = setTimeout(cancel, 120_000)
+        function expire() {
+          finish(undefined, undefined, true)
+          close()
+        }
+        // Bound the entire request, including model loading and a possible
+        // backend retry. A hung backend may never process a cancel message.
+        timer = setTimeout(expire, 35_000)
         signal.addEventListener('abort', cancel, { once: true })
         pending.set(id, {
           fail: () => finish(),
           message(event) {
-            if (event.type === 'started') { clearTimeout(timer); timer = setTimeout(cancel, 25_000) }
             if (event.type === 'result') finish(event.result)
             if (event.type === 'error') finish(undefined, event.unavailable)
           },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useId, useRef, useState } from 'react'
 import { BookOpen, Bookmark, Check, Link2, MessageCircle, Sparkles, X } from 'lucide-react'
 import { quietTapLine, reactionForPage, type BeatKind, type SpiritMood } from '../lib/companion'
 import { pageInsight, relatedPage, type PageInsight } from '../lib/readingInsights'
@@ -10,6 +10,8 @@ import { expressions } from '../companion/inference'
 type Action = 'recap' | 'question' | 'bookmark' | 'connect'
 type Moment = { reactionId?: number; thinking?: boolean; page: number; mood: SpiritMood; kind?: BeatKind; line?: string; action?: Action }
 const speechCooldown = 72_000
+const modelReplyWait = 1800
+const modelExcerpt = (text: string) => text.trim().split(/\s+/).slice(0, 165).join(' ')
 const noticeTime = {
   doubt: 920, deception: 1120, surprise: 260, danger: 880, unease: 1380, humor: 450, grief: 1260, relief: 720, warmth: 800,
 }
@@ -39,6 +41,7 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
   const memories = useRef(new Map<number, PageInsight>())
   const lastVisit = useRef<{ page: number; start: number } | undefined>(undefined)
   const dwellTimes = useRef<number[]>([])
+  const latestTap = useRef(-Infinity)
   const lastSpeech = useRef(-Infinity)
   const spokenTurns = useRef({ automatic: 0, tap: 0 })
   const [tabVisible, setTabVisible] = useState(() => !document.hidden)
@@ -48,6 +51,11 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
   const [insight, setInsight] = useState<PageInsight>()
   const visible = available && mode !== 'Off' && tabVisible
   const { mood: storyMood, analyze, enabled, cancel: cancelModel, rememberNames } = useReadingModel(visible, page)
+  const prepareModel = useEffectEvent((text: string, number: number) => {
+    if (enabled && mode === 'Occasional' && !document.hidden && !document.querySelector('dialog[open]')) {
+      void analyze(modelExcerpt(text), number, recentLines.current)
+    }
+  })
   const current = moment?.page === page ? moment : undefined
   const connection = insight && relatedPage(insight, page, memories.current)
 
@@ -57,12 +65,16 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
     return () => document.removeEventListener('visibilitychange', sync)
   }, [])
 
-  const cancel = useCallback(() => {
+  const cancelReply = useCallback(() => {
     attempt.current++
-    cancelModel()
     for (const timer of animationTimers.current) window.clearTimeout(timer)
     animationTimers.current = []
-  }, [cancelModel])
+  }, [])
+
+  const cancel = useCallback(() => {
+    cancelReply()
+    cancelModel()
+  }, [cancelReply, cancelModel])
 
   const remember = useCallback((text: string) => {
     rememberNames(text, page)
@@ -97,7 +109,10 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
       setIdle('focused')
       try {
         const text = await readPage(page)
-        if (active) remember(text)
+        if (active) {
+          remember(text)
+          prepareModel(text, page)
+        }
       } catch { /* Text-free pages still support the reading companion. */ }
     }, 12_000)
     const rest = window.setTimeout(() => setIdle('sleepy'), 120_000)
@@ -121,8 +136,10 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
   const perform = useCallback(async (words?: number, action?: Action) => {
     const automatic = words !== undefined
     const interrupted = () => document.hidden || !!document.querySelector('dialog[open]') || (automatic && window.getSelection()?.type === 'Range')
-    if (!visible || interrupted() || (automatic && reactedPages.current.has(page))) return
-    cancel()
+    if (!visible || interrupted() || (automatic && (reactedPages.current.has(page) ||
+        Date.now() - latestTap.current < modelReplyWait + 1000))) return
+    if (!automatic) latestTap.current = Date.now()
+    cancelReply()
     setPrompts(false)
     setMoment(automatic ? undefined : { page, mood: 'curious' })
     const token = attempt.current
@@ -143,12 +160,18 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
       : `Remember “${related.topic}” on page ${related.page}? Here it is again.`)
     let reaction = reactionForPage(text, { words, seen: seenBeats.current, recent: action === 'question' ? [] : recentLines.current, previous: recent, preferQuestion })
     if (enabled && (action === 'question' || !action)) {
-      const excerpt = text.trim().split(/\s+/).slice(0, words === 115 ? 165 : 260).join(' ')
-      if (excerpt) {
+      const excerpt = modelExcerpt(text)
+      const request = analyze(excerpt, page, recentLines.current)
+      if (request) {
+        let deadline: number | undefined
         if (!automatic) setMoment({ page, mood: 'curious', thinking: true })
-        const prediction = await analyze(excerpt, page, recentLines.current)
-        if (token !== attempt.current || interrupted()) return
-        if (prediction?.question && prediction.mood !== 'quiet') {
+        const prediction = await Promise.race([
+          request,
+          new Promise<undefined>(resolve => { deadline = window.setTimeout(resolve, modelReplyWait) }),
+        ]).finally(() => window.clearTimeout(deadline))
+        if (token !== attempt.current) return
+        if (interrupted()) { setMoment(undefined); return }
+        if (prediction?.question && prediction.mood !== 'quiet' && !recentLines.current.includes(prediction.question)) {
           const stamp = reaction?.stamp ?? excerpt.toLowerCase().slice(0, 180)
           if ((!automatic || !seenBeats.current.has(stamp)) && (preferQuestion || !reaction)) {
             const [mood, kind] = expressions[prediction.mood]
@@ -206,7 +229,7 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
     if (automatic && reaction) {
       animationTimers.current.push(window.setTimeout(showLine, noticeTime[reaction.kind] + (reaction.strength < 6 ? 180 : 0)))
     } else showLine()
-  }, [visible, page, total, readPage, cancel, remember, bookmarked, saveBookmark, analyze, enabled])
+  }, [visible, page, total, readPage, cancelReply, remember, bookmarked, saveBookmark, analyze, enabled])
 
   useEffect(() => {
     if (!visible || mode !== 'Occasional' || prompts) return
@@ -219,7 +242,7 @@ export default function ReadingCompanion({ page, total, mode, available, reduced
   }, [visible, mode, page, perform, prompts])
 
   function dismiss() {
-    cancel()
+    cancelReply()
     setPrompts(false)
     setMoment(undefined)
   }

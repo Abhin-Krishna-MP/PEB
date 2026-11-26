@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { openReadingModel } from './client'
-import { expressions, type Emotion } from './inference'
+import { expressions, type Emotion, type ReadingPrediction } from './inference'
 import { useSmartSpirit } from './smartSpirit'
 
 function namesIn(text: string) {
@@ -12,7 +12,7 @@ export function useReadingModel(available: boolean, page: number) {
   const status = useSmartSpirit(state => state.status)
   const model = status.kind === 'ready' ? status.download.model : undefined
   const worker = useRef<ReturnType<typeof openReadingModel> | undefined>(undefined)
-  const pending = useRef<AbortController | undefined>(undefined)
+  const pending = useRef<{ page: number; controller: AbortController; result: Promise<ReadingPrediction | undefined> } | undefined>(undefined)
   const latestPage = useRef(page)
   latestPage.current = page
   const history = useRef<{ page: number; mood: Emotion } | undefined>(undefined)
@@ -20,7 +20,7 @@ export function useReadingModel(available: boolean, page: number) {
   const [expression, setExpression] = useState<{ page: number; mood: Emotion }>()
 
   const cancel = useCallback(() => {
-    pending.current?.abort()
+    pending.current?.controller.abort()
     pending.current = undefined
   }, [])
 
@@ -41,23 +41,26 @@ export function useReadingModel(available: boolean, page: number) {
 
   useEffect(() => cancel, [page, cancel])
 
-  const analyze = useCallback(async (text: string, number: number, recent: readonly string[]) => {
+  const analyze = useCallback((text: string, number: number, recent: readonly string[]) => {
     const client = worker.current
     if (!model || !client || !text.trim() || latestPage.current !== number) return
+    if (pending.current?.page === number) return pending.current.result
     cancel()
     const controller = new AbortController()
-    pending.current = controller
     const previous = [...known.current].filter(([, earlier]) => earlier < number).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([person]) => person)
     const last = history.current
     const previousMood = last && number > last.page && number - last.page <= 2 ? last.mood : undefined
-    const { result, unavailable } = await client.predict(model, { text, recent, previous, previousMood }, controller.signal)
-    if (controller.signal.aborted || latestPage.current !== number) return
-    pending.current = undefined
-    if (unavailable) useSmartSpirit.getState().unavailable()
-    if (result) {
-      history.current = { page: number, mood: result.mood }
-      setExpression(history.current)
-    }
+    const result = client.predict(model, { text, recent, previous, previousMood }, controller.signal).then(outcome => {
+      if (controller.signal.aborted || latestPage.current !== number) return
+      if (outcome.timedOut) worker.current = undefined
+      if (outcome.unavailable) useSmartSpirit.getState().unavailable()
+      if (outcome.result) {
+        history.current = { page: number, mood: outcome.result.mood }
+        setExpression(history.current)
+      }
+      return outcome.result
+    })
+    pending.current = { page: number, controller, result }
     return result
   }, [model, cancel])
 

@@ -41,6 +41,27 @@ describe('Smart Spirit replies', () => {
     client.close()
   })
 
+  it('terminates a stalled worker at the same deadline before and after startup', async () => {
+    vi.useFakeTimers()
+    try {
+      for (const started of [false, true]) {
+        const worker = {
+          onmessage: (event: { data: InferenceResponse }) => { void event },
+          postMessage: vi.fn(),
+          terminate: vi.fn(),
+        }
+        const client = openReadingModel(() => worker as unknown as Worker)
+        const promise = client.predict(primaryModel, { text: 'A scene', previous: [], recent: [] }, new AbortController().signal)
+        await vi.advanceTimersByTimeAsync(30_000)
+        if (started) worker.onmessage({ data: { id: 1, type: 'started' } })
+        expect(worker.terminate).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(5000)
+        expect(await promise).toMatchObject({ timedOut: true })
+        expect(worker.terminate).toHaveBeenCalledOnce()
+      }
+    } finally { vi.useRealTimers() }
+  })
+
   it('keeps download progress separate from the inference watchdog', async () => {
     const worker = {
       onmessage: (event: { data: InferenceResponse }) => { void event },
