@@ -628,9 +628,11 @@ test.describe('phone tilt page turns', () => {
 
   test('requires opt-in and permission, curls both ways, and remembers when turned off', async ({ page }) => {
     await page.addInitScript(() => {
-      Object.defineProperty(DeviceMotionEvent, 'requestPermission', {
-        value: () => Promise.resolve(sessionStorage.getItem('motion-grant') ?? 'denied'),
-      })
+      for (const api of [DeviceMotionEvent, DeviceOrientationEvent]) {
+        Object.defineProperty(api, 'requestPermission', {
+          value: () => Promise.resolve(sessionStorage.getItem('motion-grant') ?? 'denied'),
+        })
+      }
     })
     await page.goto('/')
     await sampleOpen(page).click()
@@ -673,4 +675,54 @@ test.describe('phone tilt page turns', () => {
     await options.click()
     await expect(toggle).not.toBeChecked()
   })
+
+  test('turns from browser orientation updates and previews the direction in Reader options', async ({ page, context }) => {
+    const sensor = await context.newCDPSession(page)
+    const lean = (gamma: number) => sensor.send('DeviceOrientation.setDeviceOrientationOverride', { alpha: 0, beta: 25, gamma })
+    await lean(0)
+    await page.goto('/')
+    await sampleOpen(page).click()
+    await expect(paper(page, 12)).toBeVisible()
+    await page.getByRole('button', { name: 'Reader options', exact: true }).click()
+    await page.getByLabel('Turn pages by tilting').click()
+    await expect(page.getByLabel('Turn pages by tilting')).toBeChecked()
+    await expect(page.getByText(/Sensor ready/)).toBeVisible()
+    await lean(-19)
+    await expect(page.getByText(/Left tilt detected/)).toBeVisible()
+    await expect(pageControl(page)).toHaveValue('12')
+    await lean(0)
+    await page.getByRole('button', { name: 'Close reader options' }).click()
+    await lean(19)
+    await expect(pageControl(page)).toHaveValue('11')
+    await lean(0)
+    // Let the sensor sample the return to center before the next gesture.
+    await page.waitForTimeout(200)
+    await lean(-19)
+    await expect(pageControl(page)).toHaveValue('12')
+  })
+
+  test('turns using only accelerometer readings at a steep reading angle', async ({ page }) => {
+    await page.goto('/')
+    await sampleOpen(page).click()
+    await expect(paper(page, 12)).toBeVisible()
+    await page.getByRole('button', { name: 'Reader options', exact: true }).click()
+    await page.getByLabel('Turn pages by tilting').click()
+    await expect(page.getByLabel('Turn pages by tilting')).toBeChecked()
+    await page.getByRole('button', { name: 'Close reader options' }).click()
+    const hold = (x: number) => page.evaluate(async x => {
+      for (let i = 0; i < 12; i++) {
+        window.dispatchEvent(new DeviceMotionEvent('devicemotion', {
+          accelerationIncludingGravity: { x, y: Math.sqrt(9.81 ** 2 - x ** 2), z: 0 },
+        }))
+        await new Promise(resolve => setTimeout(resolve, 20))
+      }
+    }, x)
+    await hold(0)
+    await hold(2.4)
+    await expect(pageControl(page)).toHaveValue('13')
+    await hold(0)
+    await hold(-2.4)
+    await expect(pageControl(page)).toHaveValue('12')
+  })
+
 })

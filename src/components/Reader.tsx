@@ -217,7 +217,7 @@ export default function Reader({ book, file, close, password, toast }: { book: B
     if (!scrolling && navigation.current) navigation.current(direction)
     else jump(adjacentPage(page, direction, false, total))
   }
-  const tilt = useTiltTurns(preferences.tiltTurns, firstPageSettled && !error && !pane && !controls && !note && !showExport, turn)
+  const tilt = useTiltTurns(preferences.tiltTurns, firstPageSettled && !error && !pane && !controls && !note && !showExport, turn, controls)
   async function setTiltTurns(enabled: boolean) {
     if (enabled && !await tilt.allow()) return
     try { await configure({ tiltTurns: enabled }) }
@@ -343,9 +343,12 @@ export default function Reader({ book, file, close, password, toast }: { book: B
                 disabled={tilt.requesting || (!tilt.supported && !preferences.tiltTurns)} onChange={event => void setTiltTurns(event.target.checked)} /></label>
               <p id="tilt-hint" role="status">{!window.isSecureContext ? 'Open Folio over HTTPS to use motion sensors.' :
                 !tilt.supported ? 'Motion sensors are unavailable in this browser.' : tilt.permissionHint ||
-                (preferences.tiltTurns && tilt.noData ? 'No gyroscope readings yet. Check motion access on this device.' :
-                  'Flick your wrist left for next or right for previous, then return to center.')}</p>
-              {tilt.supported && preferences.tiltTurns && tilt.noData && <button disabled={tilt.requesting} onClick={() => void tilt.allow()}>Retry motion access</button>}
+                (!preferences.tiltTurns ? 'Tilt left for the next page or right to go back.' :
+                 tilt.status === 'missing' ? 'No motion readings. In Chrome, check Settings → Site settings → Motion sensors, then retry.' :
+                 tilt.status === 'waiting' ? 'Waiting for motion readings…' :
+                 tilt.detected ? `${tilt.detected === 1 ? 'Left' : 'Right'} tilt detected. Close Reader options to turn pages.` :
+                 'Sensor ready. Tilt left or right to test here, or close Reader options to read.')}</p>
+              {tilt.supported && preferences.tiltTurns && tilt.status === 'missing' && <button disabled={tilt.requesting} onClick={() => void tilt.allow()}>Retry motion access</button>}
             </div>}
             <button onClick={() => togglePane('outline')}><ListTree size={17} /> Table of contents</button>
             <button onMouseDown={event => event.preventDefault()} onClick={() => { highlight(); setControls(false) }}><Highlighter size={17} /> Highlight selection</button>
