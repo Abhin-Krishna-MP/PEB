@@ -27,6 +27,7 @@ export type Book = {
   favorite: boolean
   annotations: Annotation[]
   collectionId?: string
+  driveFile?: { id: string; account: string }
 }
 export type Collection = { id: string; name: string }
 export type Preferences = {

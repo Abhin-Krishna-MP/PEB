@@ -26,3 +26,28 @@ it('stores PDFs and reading state and removes all their records on deletion', as
   await clearLibrary()
   expect(await readLibrary()).toEqual({ books: [], collections: [], preferences: defaults })
 })
+
+it('merges synced progress and independent notes without reauthoring received records', async () => {
+  const { bindDriveAccount, applyDriveRecords, readDriveRecords } = await import('../src/lib/storage')
+  await clearLibrary()
+  const book = { ...samples[0], id: 'sync-book', title: 'Sync example', sample: undefined, page: 2 }
+  await saveBook(book, new Blob(['%PDF-1.7']))
+  const binding = await bindDriveAccount('reader')
+  const device = 'second-device'
+  await updateBook(book.id, { annotations: [{ id: 'local-note', page: 2, kind: 'note', text: 'Local note' }] })
+  const clock = Date.now() + 1000
+  await applyDriveRecords(binding, [
+    { key: 'position/sync-book', kind: 'position', id: book.id, value: { page: 8, openedAt: clock }, clock, device },
+    { key: 'annotation/sync-book/remote-note', kind: 'annotation', id: book.id, annotation: 'remote-note',
+      value: { id: 'remote-note', page: 8, kind: 'note', text: 'Remote note' }, clock, device },
+  ], new Map([[book.id, 'drive-pdf']]))
+  const stored = (await readLibrary()).books.find(item => item.id === book.id)
+  expect(stored).toMatchObject({ page: 8, driveFile: { id: 'drive-pdf', account: 'reader' } })
+  expect(stored?.annotations.map(note => note.text)).toEqual(['Local note', 'Remote note'])
+  expect((await readDriveRecords()).find(row => row.key === 'position/sync-book')?.device).toBe(device)
+  await expect(bindDriveAccount('different-reader')).rejects.toThrow('different Google account')
+  await clearLibrary()
+  expect(await readDriveRecords()).toHaveLength(0)
+  expect((await bindDriveAccount('different-reader')).account).toBe('different-reader')
+  await clearLibrary()
+})

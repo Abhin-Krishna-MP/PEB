@@ -10,6 +10,7 @@ import Settings from './components/Settings'
 import BookCard, { type BookAction } from './components/BookCard'
 import { fileSize, progress, type Book, type LibraryLayout } from './lib/model'
 import { useLibrary } from './lib/store'
+import { useDriveSync, watchDriveSync } from './lib/driveSync'
 import { readFile } from './lib/storage'
 import type { PasswordRequest } from './lib/pdf'
 import { currentBook, useReaderRoute } from './lib/readerRoute'
@@ -49,6 +50,7 @@ type PasswordPrompt = { incorrect: boolean; bookId?: string; resolve: (value: st
 
 export default function App() {
   const { books, collections, preferences, ready, init, add, edit, closeBook, collect, deleteCollection, clear, configure } = useLibrary()
+  useEffect(watchDriveSync, [])
   const [systemLight, setSystemLight] = useState(() => matchMedia('(prefers-color-scheme: light)').matches)
   const lightAppearance = preferences.appearance === 'Light' || (preferences.appearance === 'System' && systemLight)
   useEffect(() => {
@@ -287,7 +289,10 @@ export default function App() {
     if (dialog.kind === 'move') persist(edit(dialog.book.id, { collectionId: value || undefined }), 'Collection updated.')
     if (dialog.kind === 'delete') persist(closeBook(dialog.book.id), 'Book removed.')
     if (dialog.kind === 'deleteCollection') persist(deleteCollection(dialog.id).then(() => navigate('collections')), 'Collection removed.')
-    if (dialog.kind === 'clear') persist(clear().then(() => navigate('library')), 'Local library cleared.')
+    if (dialog.kind === 'clear') {
+      useDriveSync.getState().disconnect()
+      persist(clear().then(() => navigate('library')), 'Local library cleared.')
+    }
     setDialog(undefined)
   }
 
@@ -440,7 +445,7 @@ export default function App() {
         event.stopPropagation()
         setDragging(false)
         void importFiles(event.dataTransfer.files)
-      }}><FileUp size={29} /><strong>Choose PDF files</strong><span>Or drag and drop them here</span></button><p className="muted">Documents are processed and stored on this device.</p></> : dialog.kind === 'install' ?
+      }}><FileUp size={29} /><strong>Choose PDF files</strong><span>Or drag and drop them here</span></button><p className="muted">Documents are stored on this device and synced when Google Drive is connected.</p></> : dialog.kind === 'install' ?
       <><p className="muted">Open your browser’s menu and look for <strong>Install app</strong> or <strong>Add to Home Screen</strong>. On iPhone or iPad, open Folio in Safari and use the Share menu.</p><button className="secondary-button" onClick={() => setDialog(undefined)}><Download size={16} /> Done</button></> : dialog.kind === 'filter' ? <div className="shelf-filter-options">
         {categoryOptions.map(([value, count]) => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => { pickCategory(value); setDialog(undefined) }}>{categoryLabel(value)} <span>{count}</span></button>)}
       </div> :
@@ -448,7 +453,7 @@ export default function App() {
           {dialog.kind === 'rename' && <label>Book title<input name="name" autoFocus required maxLength={180} defaultValue={dialog.book.title} /></label>}
           {dialog.kind === 'collection' && <label>Collection name<input name="name" autoFocus required maxLength={60} placeholder="e.g. Research papers" /></label>}
           {dialog.kind === 'move' && <label>Collection<select name="name" defaultValue={dialog.book.collectionId ?? ''}><option value="">No collection</option>{collections.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{!collections.length && <span className="muted">Create a collection from the sidebar to organize books.</span>}</label>}
-          {dialog.kind === 'delete' && <p className="muted">“{dialog.book.title}” and its reading history will be removed from this device.</p>}
+          {dialog.kind === 'delete' && <p className="muted">“{dialog.book.title}” and its reading history will be removed. If you connect Google Drive, this removal will sync to your other devices.</p>}
           {dialog.kind === 'deleteCollection' && <p className="muted">Books in this collection will move back to the main library.</p>}
           {dialog.kind === 'clear' && <p className="muted">This permanently removes all local books, notes, bookmarks, and settings.</p>}
           <div className="dialog-actions"><button className="secondary-button" type="button" onClick={() => setDialog(undefined)}>Cancel</button><button className="primary-button" type="submit">{dialog.kind === 'clear' ? 'Clear library' : dialog.kind.startsWith('delete') ? 'Delete' : 'Save'}</button></div>

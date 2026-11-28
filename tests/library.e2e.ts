@@ -786,3 +786,122 @@ test('the spirit answers when the PDF text stream never finishes', async ({ page
   await page.clock.fastForward(1850)
   await expect(spirit.locator('.companion-bubble')).toHaveText('The words are a blur from here. I’ll keep you company.')
 })
+
+test('optional Drive sync opens a phone PDF and reading notes on another device', async ({ browser }) => {
+  test.skip(!process.env.FOLIO_TEST_GOOGLE_DRIVE, 'Run with the configured Drive test build.')
+  const files = new Map<string, { id: string; name: string; body: Buffer }>()
+  let requests = 0
+  let pdfReads = 0
+  const scope = 'https://www.googleapis.com/auth/drive.appdata'
+  const baseURL = 'http://localhost:4173'
+  const devices = await Promise.all([
+    browser.newContext({ baseURL, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }),
+    browser.newContext({ baseURL, viewport: { width: 1366, height: 810 } }),
+  ])
+  try {
+    for (const context of devices) {
+      await context.route('https://accounts.google.com/gsi/client', route => route.fulfill({
+        contentType: 'application/javascript',
+        body: `window.google = {accounts:{oauth2:{initTokenClient: options => ({
+          requestAccessToken() { options.callback({access_token: 'test-access', expires_in: 3600, scope: '${scope}'}) }
+        })}}}`,
+      }))
+      await context.route('https://www.googleapis.com/**', async route => {
+        const request = route.request()
+        const method = request.method()
+        const url = new URL(request.url())
+        const cors = {
+          'Access-Control-Allow-Origin': baseURL,
+          'Access-Control-Allow-Headers': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+        }
+        if (method === 'OPTIONS') return route.fulfill({ status: 204, headers: cors })
+        requests++
+        expect((await request.allHeaders()).authorization).toBe('Bearer test-access')
+        const json = (data: unknown) => route.fulfill({ status: 200, headers: cors, json: data })
+        if (url.pathname.endsWith('/about')) return json({ user: { permissionId: 'same-account', emailAddress: 'reader@example.test' } })
+        if (method === 'GET' && url.pathname.endsWith('/files')) {
+          expect(url.searchParams.get('spaces')).toBe('appDataFolder')
+          return json({ files: [...files.values()].map(({ id, name }) => ({ id, name })) })
+        }
+        if (method === 'POST' || method === 'PATCH') {
+          const upload = request.postDataBuffer()!.toString('latin1')
+          const boundary = request.headers()['content-type'].split('boundary=')[1]
+          const parts = upload.split('--' + boundary)
+          const metadata = JSON.parse(Buffer.from(parts[1].split('\r\n\r\n')[1].trim(), 'latin1').toString())
+          if (method === 'POST') expect(metadata.parents).toEqual(['appDataFolder'])
+          const body = Buffer.from(parts[2].slice(parts[2].indexOf('\r\n\r\n') + 4, -2), 'latin1')
+          const id = method === 'PATCH' ? url.pathname.split('/').at(-1)! : 'test-file-' + files.size
+          files.set(id, { id, name: metadata.name, body })
+          return json({ id, name: metadata.name })
+        }
+        const file = files.get(url.pathname.split('/').at(-1)!)
+        if (!file) return route.fulfill({ status: 404, headers: cors })
+        if (file.name.endsWith('.pdf')) pdfReads++
+        return route.fulfill({ status: 200, headers: cors, body: file.body })
+      })
+    }
+    const [phone, laptop] = await Promise.all(devices.map(context => context.newPage()))
+    const settings = async (page: Page) => page.locator(page === phone ? '.mobile-navigation' : '.sidebar')
+      .getByRole('button', { name: 'Settings', exact: true }).click()
+    const closeReader = async (page: Page) => page.getByRole('button', { name: 'Library', exact: true }).click()
+    const connect = async (page: Page) => {
+      await settings(page)
+      await page.getByRole('button', { name: 'Connect Google Drive' }).click()
+      await expect(page.getByText(/Last synced/)).toBeVisible()
+    }
+    const choosePage = async (page: Page, target: number) => {
+      await pageControl(page).fill(String(target))
+      await pageControl(page).press('Enter')
+      await expect(paper(page, target)).toBeVisible()
+    }
+
+    await phone.goto('/')
+    const pdf = await PDFDocument.create()
+    pdf.setTitle('Across devices')
+    for (let n = 1; n <= 4; n++) pdf.addPage([460, 625]).drawText('Sync page ' + n)
+    await filePicker(phone).setInputFiles({ name: 'Across devices.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save()) })
+    await expect(paper(phone, 1)).toBeVisible()
+    await choosePage(phone, 3)
+    await phone.getByRole('button', { name: 'Bookmarks and notes' }).click()
+    await phone.getByRole('button', { name: 'Add note' }).click()
+    await phone.getByRole('textbox', { name: 'Note', exact: true }).fill('Read this on the laptop')
+    await phone.getByRole('button', { name: 'Save note' }).click()
+    await expect(phone.getByText('Read this on the laptop')).toBeVisible()
+    expect(requests).toBe(0)
+
+    await closeReader(phone)
+    await connect(phone)
+    expect([...files.values()].filter(file => file.name.endsWith('.pdf'))).toHaveLength(1)
+    await laptop.goto('/')
+    await expect.poll(() => laptop.evaluate(() => navigator.serviceWorker.controller?.state)).toBe('activated')
+    await connect(laptop)
+    await laptop.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Library/ }).click()
+    await laptop.getByRole('button', { name: 'Open Across devices', exact: true }).click()
+    await expect(pageControl(laptop)).toHaveValue('3')
+    await expect(paper(laptop, 3)).toBeVisible()
+    await laptop.getByRole('button', { name: 'Bookmarks and notes' }).click()
+    await expect(laptop.getByText('Read this on the laptop')).toBeVisible()
+    await laptop.getByRole('button', { name: 'Bookmarks and notes' }).click()
+    expect(pdfReads).toBe(1)
+
+    await devices[1].setOffline(true)
+    await closeReader(laptop)
+    await laptop.getByRole('button', { name: 'Open Across devices', exact: true }).click()
+    await choosePage(laptop, 4)
+    expect(pdfReads).toBe(1)
+    await devices[1].setOffline(false)
+    await expect.poll(() => [...files.values()].some(file => file.name.endsWith('.json') &&
+      JSON.parse(file.body.toString()).records.some((row: { kind: string; value?: { page: number } }) => row.kind === 'position' && row.value?.page === 4)
+    )).toBe(true)
+
+    await phone.getByRole('button', { name: 'Sync now' }).click()
+    await expect(phone.getByText(/Last synced/)).toBeVisible()
+    await phone.getByRole('button', { name: 'Disconnect' }).click()
+    await phone.locator('.mobile-navigation').getByRole('button', { name: 'Library', exact: true }).click()
+    await phone.getByRole('button', { name: 'Open Across devices', exact: true }).click()
+    await expect(pageControl(phone)).toHaveValue('4')
+  } finally {
+    await Promise.all(devices.map(context => context.close()))
+  }
+})

@@ -29,6 +29,18 @@ After the first production visit, allow the service worker to finish caching bef
 - Use the book menu to rename, move, or delete documents. The heart toggles favorites. Collections are created from the sidebar or Collections screen. Settings reports browser storage usage and can request that the browser retain local data. Browser settings, private mode, quotas, and changes to the app's origin can affect access to a local library.
 - Choose **Export HTML flipbook** in Reader options to download a single file that opens offline in a browser. The export embeds rendered page images with navigation. Searchable text, bookmarks, and personal notes stay in Folio. Exports from password-protected PDFs contain unencrypted page images.
 
+## Optional Google Drive sync
+
+Folio works without an account. To sync, open **Settings → Google Drive sync → Connect Google Drive** on each device and use the same Google account. While connected, Folio syncs after library edits, when you come back online, and periodically while the app is open. **Sync now** checks Drive immediately. The browser holds the access token in memory, so restarting Folio or reaching token expiry may require reconnecting.
+
+Folio requests access to its private Google Drive app-data folder. PDFs and reading data use the connected account's storage. A PDF from another device downloads on first open and is then available offline if the device has room to cache it. Built-in sample PDFs come from Folio. Reading position, bookmarks, annotations, favorites, and collections sync as separate records. For simultaneous edits to the same record, the most recent recorded edit wins. Deleting a book removes it from the synced library. Its raw Drive PDF is retained. **Clear library** disconnects Drive and clears only this device.
+
+### Enable sync on a deployment
+
+1. In Google Cloud, enable the **Google Drive API** and configure the OAuth consent screen. For an external app in testing, add the accounts you want to test.
+2. Create an **OAuth client ID** of type **Web application**. Add the exact deployment origin under **Authorized JavaScript origins**, such as `https://peb-theta.vercel.app`. Add `http://localhost:5173` for local development if needed.
+3. Set `VITE_GOOGLE_CLIENT_ID` to the public client ID in Vercel or copy `.env.example` to `.env.local` for local development. Redeploy after setting the variable. Folio requires no Google client secret or application server.
+
 ## Reading companion
 
 Folio uses the rule-based spirit by default. To enable local generation, open **Settings → Offline Smart Spirit → Download & enable** while online. Folio stores the model in browser Cache Storage. Use **Remove download** to free that space.

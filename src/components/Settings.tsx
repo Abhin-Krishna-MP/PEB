@@ -1,3 +1,4 @@
+import DriveSyncSetting from './DriveSyncSetting'
 import SmartSpiritSetting from './SmartSpiritSetting'
 import { Database, Download, Monitor, ShieldCheck, Trash2 } from 'lucide-react'
 import { companionModes, fileSize, type Preferences } from '../lib/model'
@@ -29,6 +30,7 @@ export default function Settings({ install, clear, usage, quota, toast }: {
       <label className="setting-row">Page-turn animation<input type="checkbox" checked={preferences.animation} onChange={event => choose('animation', event.target.checked)} /></label>
       <label className="setting-row">Reduce motion<input type="checkbox" checked={preferences.reducedMotion} onChange={event => choose('reducedMotion', event.target.checked)} /></label>
     </div>
+    <DriveSyncSetting />
     <div className="settings-group"><h2><Database size={19} /> Offline & storage</h2>
       <div className="setting-row"><span>Browser storage</span><span>{fileSize(usage)} used{quota > 0 && ' / ' + fileSize(quota)}</span></div>
       <div className="setting-row"><span>Protect your library from automatic eviction</span><button className="secondary-button" onClick={async () => {

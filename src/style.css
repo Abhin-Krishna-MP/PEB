@@ -832,3 +832,7 @@ dialog::backdrop { background: #07090bd1; }
 .smart-spirit-setting progress { width: 100%; accent-color: var(--gold); }
 .smart-spirit-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .spirit-thinking { color: var(--muted); font-size: .75rem; }
+
+.drive-setting { align-items: center; flex-wrap: wrap; gap: .65rem; }
+.drive-setting > div:first-child { min-width: 0; flex: 1 1 16rem; }
+.drive-setting p { margin: .3rem 0; font-size: .8rem; }
