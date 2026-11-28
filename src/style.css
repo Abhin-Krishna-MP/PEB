@@ -34,6 +34,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .primary-button:hover { background: #edcba6; }
 .secondary-button { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
 .secondary-button:hover { background: var(--raised); }
+a.secondary-button { text-decoration: none; }
 .danger { color: #db8783 !important; }
 .muted { color: var(--muted); font-size: 13px; line-height: 1.65; }
 .shell { min-height: 100dvh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }

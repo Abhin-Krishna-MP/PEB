@@ -1,6 +1,6 @@
 import DriveSyncSetting from './DriveSyncSetting'
 import SmartSpiritSetting from './SmartSpiritSetting'
-import { Database, Download, Monitor, ShieldCheck, Trash2 } from 'lucide-react'
+import { Database, Download, FileText, Monitor, ShieldCheck, Trash2 } from 'lucide-react'
 import { companionModes, fileSize, type Preferences } from '../lib/model'
 import { useLibrary } from '../lib/store'
 
@@ -41,6 +41,10 @@ export default function Settings({ install, clear, usage, quota, toast }: {
       }}><ShieldCheck size={16} /> Request persistence</button></div>
       <div className="setting-row"><span>Install Folio on this device</span><button className="secondary-button" onClick={install}><Download size={16} /> Install app</button></div>
       <div className="setting-row"><span>Remove PDFs, collections, and reading history</span><button className="secondary-button danger" onClick={clear}><Trash2 size={16} /> Clear library</button></div>
+    </div>
+    <div className="settings-group legal"><h2><FileText size={19} /> Legal</h2>
+      <div className="setting-row"><span>Privacy Policy</span><a className="secondary-button" href="/privacy.html">View policy</a></div>
+      <div className="setting-row"><span>Terms of Service</span><a className="secondary-button" href="/terms.html">View terms</a></div>
     </div>
   </section>
 }
